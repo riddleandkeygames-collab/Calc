@@ -58,6 +58,7 @@ body {
 .armdot { position: absolute; right: 0; top: 0; width: 4px; height: 4px; border-radius: 50%; background: var(--dim); opacity: .55; }
 .board { flex: 1; min-height: 0; background: var(--housing); border-radius: 6px; padding: 10px 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
 .labels, .row { display: grid; gap: 2px; }
+.board .row, .board .labels { cursor: pointer; }
 .board.scroll { overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
 .board.scroll::-webkit-scrollbar { display: none; }
 .board.scroll .labels { position: sticky; top: -10px; background: var(--housing); padding-top: 10px; margin-top: -10px; z-index: 1; }
@@ -192,6 +193,7 @@ body {
         <li><b>Tap letters (board by time):</b> tap the first three letters of their destination, wherever you can see them on the board, then stop. After a second's pause the app finds the place, and “Departures” changes to its name for 2 seconds so you know it worked. Tap a number in the time or platform column, before or after the letters, to choose the platform.</li>
         <li><b>Hold the station name (1 second):</b> opens what looks like a station search. Type the spectator's destination and press Go. The board doesn't change yet.</li>
         <li><b>Double-tap the clock:</b> reveal now.</li>
+        <li><b>Double-tap the station name:</b> reset the board, ready for the next performance. After a reveal you must reset before tapping rows again.</li>
         <li><b>Hold the clock (1 second):</b> open this screen.</li>
       </ul>
     </div>
@@ -211,11 +213,12 @@ body {
       <h2>Tapping rows</h2>
       <ul>
         <li>The board opens as “Departures by destination”: one train for each letter, in alphabetical order. It scrolls, like a real one.</li>
-        <li>A tap anywhere on a row counts as that row's first letter. For York, tap the Y row, the O row, then the R row: “You could have gone here, or here, or here…”</li>
+        <li>A tap anywhere on a row counts as the <b>first letter of that row's station</b>, whatever part of the row you touch. You don't tap letters inside a name. For York, find the station starting with Y and tap it, then the station starting with O, then the one starting with R: “You could have gone here, or here, or here…”</li>
+        <li>Scroll the board to reach rows further down. A scroll never counts as a tap.</li>
         <li>No station starts with X. For a letter that has no row, tap the column headings (Time, Destination, Plat) instead. It counts as “any letter”: E, headings, E finds Exeter.</li>
-        <li>Pause for a second when you're done. “Departures” changes to the place it found for 2 seconds.</li>
+        <li>Pause for a second when you're done. “Departures” changes to the place it found for 2 seconds. If nothing matches, it shows the letters it received instead, so you can see what went wrong.</li>
         <li>At the reveal the board scrolls to the top and rattles round into a normal departures board, with their train first.</li>
-        <li>Reset board (in this screen) brings back the board by destination.</li>
+        <li>After the reveal the board stays in time order. Double-tap the station name to bring back the board by destination.</li>
       </ul>
     </div>
 
@@ -241,7 +244,7 @@ body {
       </ol>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 4</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 5</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -592,14 +595,23 @@ body {
     if (letters.replace(/\?/g, '')) {
       const re = new RegExp('^' + letters.replace(/\?/g, '.'));   // ? is “any letter”
       const dest = PLACES.find(p => re.test(keyOf(p)));
-      if (!dest) { buzz([30, 60, 30]); return; }
+      if (!dest) { buzz([30, 60, 30]); peek(letters.replace(/\?/g, '·') + ' – not found'); return; }
       arm({ dest, plat: digits ? String(+digits) : '', time: null, name: cfg.name });
       buzz(25); peek(dest + (digits ? ' · ' + (+digits) : ''));
     } else if (digits && armed) {
       armed.plat = String(+digits); buzz(25); peek('Platform ' + (+digits));
     }
   }
-  $('board').addEventListener('click', e => {
+  function onTap(el, fn) {
+    let sx = 0, sy = 0, st = 0, live = false;
+    el.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; st = Date.now(); live = true; });
+    el.addEventListener('pointercancel', () => { live = false; });   // the finger started scrolling
+    el.addEventListener('pointerup', e => {
+      if (live && Date.now() - st < 700 && Math.hypot(e.clientX - sx, e.clientY - sy) < 12) fn(e);
+      live = false;
+    });
+  }
+  onTap($('board'), e => {
     if (view === 'az' && cfg.input === 'rows') {
       const row = e.target.closest('.row'), head = e.target.closest('.labels');
       if (!row && !head) return;
@@ -628,6 +640,11 @@ body {
   }
   onHold($('stationZone'), openPicker, 1000);
   onHold($('clock'), openSheet, 1000);
+  let lastStTap = 0;
+  $('stationZone').addEventListener('pointerup', () => {
+    const now = Date.now();
+    if (now - lastStTap < 350) { lastStTap = 0; resetBoard(); peek('Reset'); } else lastStTap = now;
+  });
   let lastTap = 0;
   $('clock').addEventListener('pointerup', () => {
     const now = Date.now();
@@ -658,7 +675,8 @@ body {
   }
   ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot', 'cfgInput', 'cfgOrder', 'cfgPeek', 'cfgSize'].forEach(id => $(id).addEventListener('change', readSheet));
   $('testSound').addEventListener('click', () => { audio(); announce({ t: addMin(new Date(), 3), dest: 'Whitby', plat: '7', calling: ['York', 'Malton', 'Whitby'], name: cfg.name }); });
-  $('resetBtn').addEventListener('click', () => { arm(null); view = startView(); rows = []; azRows = freshAz(); relayout(); $('armStatus').textContent = armText(); buzz(25); });
+  function resetBoard() { arm(null); view = startView(); rows = []; azRows = freshAz(); relayout(); buzz(25); }
+  $('resetBtn').addEventListener('click', () => { resetBoard(); $('armStatus').textContent = armText(); });
   $('close').addEventListener('click', () => { readSheet(); $('sheet').hidden = true; if (armed) arm(armed); });
 
   // ---- start ----
