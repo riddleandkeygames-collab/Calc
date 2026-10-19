@@ -107,7 +107,7 @@ body {
 <div class="app" id="app">
   <div class="top">
     <div class="station" id="stationZone">
-      <div class="eyebrow">Departures</div>
+      <div class="eyebrow" id="eyebrow">Departures</div>
       <div class="stname" id="stname">Manchester Piccadilly</div>
     </div>
     <div class="clock" id="clock">00:00:00<span class="armdot" id="armdot" hidden></span></div>
@@ -161,6 +161,8 @@ body {
 
     <div>
       <h2>Other</h2>
+      <div class="srow"><label for="cfgTaps">Tap letters on the board to set the destination</label><input type="checkbox" id="cfgTaps"></div>
+      <div class="srow"><label for="cfgPeek">Confirm the match<br><small>The word “Departures” above the station name briefly changes to the place it found.</small></label><input type="checkbox" id="cfgPeek"></div>
       <div class="srow"><label for="cfgDot">Faint dot by the clock when a reveal is waiting</label><input type="checkbox" id="cfgDot"></div>
       <div class="srow"><label>Start a fresh board and clear the reveal</label><button class="btn" id="resetBtn">Reset board</button></div>
     </div>
@@ -168,6 +170,7 @@ body {
     <div>
       <h2>Secret controls</h2>
       <ul>
+        <li><b>Tap letters on the board:</b> tap the first three letters of their destination, wherever you can see them on the board, then stop. After a second's pause the app finds the place, and “Departures” changes to its name for 2 seconds so you know it worked. Tap a number in the time or platform column, before or after the letters, to choose the platform.</li>
         <li><b>Hold the station name (1 second):</b> opens what looks like a station search. Type the spectator's destination and press Go. The board doesn't change yet.</li>
         <li><b>Double-tap the clock:</b> reveal now.</li>
         <li><b>Hold the clock (1 second):</b> open this screen.</li>
@@ -186,16 +189,28 @@ body {
     </div>
 
     <div>
+      <h2>Tapping letters</h2>
+      <ul>
+        <li>Say they chose York. Point at the Y in one station, the O in another and the R in a third: “You could have chosen this one, or this one, or this one…”</li>
+        <li>The letters can come from any station, in any row, in any order on the screen. Only the order you tap them matters.</li>
+        <li>Three letters is usually enough. Where several places share three letters, it picks the biggest: BRI gives Bristol, so tap BRIG for Brighton. Keep tapping more letters if you need to. Check the name it shows.</li>
+        <li>Every letter except J is always somewhere on the board. If you can't find one, or the place isn't found, use the station search instead.</li>
+        <li>The board won't let a train depart while you're tapping, so the letters don't move under your finger.</li>
+        <li>A tap on a blank flap starts again.</li>
+      </ul>
+    </div>
+
+    <div>
       <h2>How to perform</h2>
       <ol>
         <li>Prop the phone on the table, board facing everyone. Landscape looks best. Let it run: trains leave and new ones appear on their own.</li>
         <li>Ask for any place in the country, a number for the platform, and a time. Get the information however suits you: they tell you, or you peek a written answer.</li>
-        <li>Pick up the phone “to check the trains”, hold the station name and type the details into the search. Put the phone back face up.</li>
+        <li>Point at stations on the board while you talk and tap their letters (see above). Or pick up the phone “to check the trains”, hold the station name and type the details into the search.</li>
         <li>After your chosen delay, the next train departs, the whole board rattles round, and their train is at the top, with the announcement.</li>
       </ol>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 1</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 2</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -207,7 +222,7 @@ body {
   const TOWNS = ['Aberdeen','Aberystwyth','Alnmouth','Ashford','Aviemore','Ayr','Banbury','Bangor','Barrow','Bath Spa','Bedford','Berwick','Birmingham','Blackpool','Bolton','Bournemouth','Bradford','Brighton','Bristol','Buxton','Cambridge','Canterbury','Cardiff','Carlisle','Carmarthen','Chester','Chesterfield','Colchester','Coventry','Crewe','Darlington','Derby','Doncaster','Dover','Dundee','Durham','Edinburgh','Ely','Exeter','Falmouth','Fort William','Glasgow','Gloucester','Grimsby','Guildford','Harrogate','Hastings','Hereford','Holyhead','Huddersfield','Hull','Inverness','Ipswich','Kendal','Kettering','Lancaster','Leeds','Leicester','Lincoln','Liverpool','Llandudno','London Euston','Lowestoft','Manchester','Middlesbrough','Milton Keynes','Morecambe','Newcastle','Newport','Northampton','Norwich','Nottingham','Oban','Oxford','Paignton','Penzance','Perth','Peterborough','Plymouth','Portsmouth','Preston','Reading','Rugby','Salisbury','Scarborough','Sheffield','Shrewsbury','Skegness','Skipton','Southampton','Southport','Stafford','Stirling','Stockport','Stoke','Sunderland','Swansea','Swindon','Taunton','Tenby','Torquay','Truro','Wakefield','Warrington','Weymouth','Whitby','Wigan','Windermere','Wolverhampton','Worcester','York'];
 
   // ---- settings ----
-  const DEF = { station: 'Manchester Piccadilly', delay: 10, name: '', flap: true, announce: true, dot: false };
+  const DEF = { station: 'Manchester Piccadilly', delay: 10, name: '', flap: true, announce: true, dot: false, taps: true, peek: true };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('departures-cfg') || '{}')); } catch (e) {}
   const save = () => { try { localStorage.setItem('departures-cfg', JSON.stringify(cfg)); } catch (e) {} };
@@ -240,31 +255,42 @@ body {
     if (r < 0.9) return 'Exp' + hhmm(addMin(t, 2 + rnd(9)));
     return 'Delayed';
   }
-  function makeRow(t, avoid) {
-    let dest; do { dest = pick(TOWNS); } while (avoid && avoid.includes(dest));
+  // Pick destinations so that every letter (bar J) is somewhere on the board, ready to be tapped.
+  const NEED = 'ABCDEFGHIKLMNOPQRSTUVWXYZ';
+  function makeRow(t, others) {
+    const used = others.map(r => r.dest);
+    const have = used.map(d => fit(d, destW)).join('');
+    const miss = NEED.split('').filter(c => !have.includes(c));
+    let best = -1, cands = [];
+    TOWNS.forEach(d => {
+      if (used.includes(d)) return;
+      const f = fit(d, destW), sc = miss.filter(c => f.includes(c)).length;
+      if (sc > best) { best = sc; cands = [d]; } else if (sc === best) cands.push(d);
+    });
+    const dest = pick(cands);
     return { t, dest, plat: String(1 + rnd(14)), status: statusFor(t), calling: callingFor(dest), forced: false };
   }
   function freshRows(n) {
     const out = []; let t = addMin(new Date(), 2 + rnd(3));
-    for (let i = 0; i < n; i++) { out.push(makeRow(t, out.map(r => r.dest))); t = addMin(t, 3 + rnd(7)); }
+    for (let i = 0; i < n; i++) { out.push(makeRow(t, out)); t = addMin(t, 3 + rnd(7)); }
     return out;
   }
   function topUp() {
     while (rows.length < nRows) {
       const last = rows[rows.length - 1];
-      rows.push(makeRow(addMin(last ? last.t : new Date(), 3 + rnd(7)), rows.map(r => r.dest)));
+      rows.push(makeRow(addMin(last ? last.t : new Date(), 3 + rnd(7)), rows));
     }
     rows.length = nRows;
   }
 
   // ---- layout: a grid of flap cells sized to the screen ----
-  let cols = 24, nRows = 6, hasStatus = false, spec = [], cells = [];
+  let cols = 24, nRows = 6, destW = 15, hasStatus = false, spec = [], cells = [];
   function layout() {
     const board = $('board');
     const W = board.clientWidth - 16;
     cols = Math.max(20, Math.min(46, Math.floor(W / (W < 500 ? 14 : 17))));
     hasStatus = cols >= 34;
-    const destW = cols - 5 - 1 - 1 - 2 - (hasStatus ? 9 : 0);
+    destW = cols - 5 - 1 - 1 - 2 - (hasStatus ? 9 : 0);
     spec = [['time', 5, true], ['', 1], ['dest', destW], ['', 1], ['plat', 2]];
     if (hasStatus) spec.push(['', 1], ['status', 8, true]);
     const cw = (W - (cols - 1) * 2) / cols;
@@ -293,7 +319,8 @@ body {
           const c = document.createElement('div'); c.className = 'cell' + (k ? '' : ' gap') + (amber ? ' amber' : '');
           c.style.height = ch + 'px'; c.style.fontSize = Math.round(Math.min(ch * 0.78, cw * 1.25)) + 'px';
           const s = document.createElement('span'); s.textContent = ' '; c.appendChild(s); row.appendChild(c);
-          line.push({ el: s, cur: ' ', tgt: ' ', gap: !k });
+          c.dataset.r = r; c.dataset.c = line.length;
+          line.push({ el: s, cur: ' ', tgt: ' ', gap: !k, kind: k });
         }
       });
       board.appendChild(row); cells.push(line);
@@ -414,7 +441,7 @@ body {
     const now = new Date();
     $('clock').firstChild.nodeValue = hhmm(now) + ':' + pad2(now.getSeconds());
     // A train leaves 40 seconds after its time; forced trains stay until reset.
-    if (rows.length && !rows[0].forced && now - rows[0].t > 40000) { rows.shift(); show(false); }
+    if (rows.length && !rows[0].forced && now - rows[0].t > 40000 && Date.now() - lastBoardTap > 15000) { rows.shift(); show(false); }
   }
   setInterval(tick, 1000);
 
@@ -476,6 +503,38 @@ body {
   $('pick').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitPick($('pick').value); } });
   $('pickCancel').addEventListener('click', closePicker);
 
+  // ---- tapping letters on the board ----
+  const PLACES = [...new Set(['London','Birmingham','Manchester','Liverpool','Leeds','Glasgow','Edinburgh','Bristol','Sheffield','Newcastle','Cardiff','Belfast','Nottingham','Leicester','Brighton','Southampton','Portsmouth','Plymouth','York','Oxford','Cambridge','Bath','Blackpool','Bournemouth','Paris','Aberdeen','Dundee','Inverness','Swansea','Coventry','Hull','Bradford','Stoke','Derby','Wolverhampton','Sunderland','Norwich','Exeter','Reading','Milton Keynes','Preston','Chester','Lancaster','Carlisle','Durham','Scarborough','Whitby','Harrogate','Bolton','Wigan','Stockport','Warrington','Huddersfield','Wakefield','Doncaster','Middlesbrough','Darlington','Lincoln','Peterborough','Northampton','Ipswich','Colchester','Canterbury','Dover','Hastings','Eastbourne','Southend','Chelmsford','Luton','Watford','Guildford','Windsor','Salisbury','Swindon','Gloucester','Cheltenham','Worcester','Hereford','Shrewsbury','Telford','Stafford','Crewe','Blackburn','Burnley','Rochdale','Oldham','Salford','Southport','Chesterfield','Mansfield','Grimsby','Cleethorpes','Skegness','Torquay','Paignton','Penzance','Truro','Newquay','Falmouth','St Ives','Taunton','Weymouth','Poole','Bognor Regis','Worthing','Margate','Ramsgate','Folkestone','Ashford','Maidstone','Tunbridge Wells','Crawley','Gatwick','Heathrow','Stansted','Bedford','Kettering','Rugby','Leamington Spa','Stratford-upon-Avon','Warwick','Banbury','High Wycombe','Aylesbury','Slough','Basingstoke','Winchester','Weston-super-Mare','Bridgwater','Yeovil','Barnstaple','Newport','Wrexham','Bangor','Holyhead','Llandudno','Aberystwyth','Tenby','Carmarthen','Pembroke','Fishguard','Barry','Merthyr Tydfil','Stirling','Perth','Fort William','Oban','Ayr','Kilmarnock','Dumfries','Berwick','Alnwick','Hexham','Morpeth','Kendal','Windermere','Keswick','Penrith','Barrow','Morecambe','Skipton','Ilkley','Halifax','Rotherham','Barnsley','Worksop','Newark','Grantham','Boston','Kings Lynn','Ely','Bury St Edmunds','Lowestoft','Great Yarmouth','Cromer','Felixstowe','Harwich','Clacton','Bridlington','Filey','Beverley','Selby','Goole','Saltburn','Hartlepool','Stockton','Redcar','Gateshead','Jarrow','Lewes','Chichester','Hove','Horsham','Reigate','Dorking','Epsom','Woking','Farnham','Aldershot','Andover','Romsey','Lymington','Ryde','Matlock','Buxton','Macclesfield','Congleton','Glossop','Wilmslow','Altrincham','Knutsford','Northwich','Runcorn','Widnes','St Helens','Ormskirk','Lytham','Fleetwood','Accrington','Clitheroe','Settle','Hebden Bridge','Todmorden','Bury','Loughborough','Hinckley','Nuneaton','Tamworth','Lichfield','Walsall','Dudley','Kidderminster','Bromsgrove','Redditch','Evesham','Malvern','Ludlow','Oswestry','Welshpool','Pwllheli','Porthmadog','Paisley','Greenock','Motherwell','Hamilton','Falkirk','Livingston','Kirkcaldy','St Andrews','Montrose','Arbroath','Elgin','Nairn','Thurso','Wick','Mallaig','Pitlochry','Aviemore','Dunblane','Gretna','Londonderry','Portrush','Newry','Lisburn','Coleraine','Larne','Brussels','Amsterdam','Lille','Alnmouth','Bath Spa','Bolton','Cardiff','Colchester','Lowestoft','Sunderland'].concat(TOWNS))];
+  const keyOf = s => s.toUpperCase().replace(/[^A-Z]/g, '');
+  let tapLetters = '', tapDigits = '', tapTimer = null, lastBoardTap = 0, peekTimer = null;
+  function peek(text) {
+    if (!cfg.peek) return;
+    $('eyebrow').textContent = text;
+    clearTimeout(peekTimer); peekTimer = setTimeout(() => { $('eyebrow').textContent = 'Departures'; }, 2000);
+  }
+  function resolveTaps() {
+    const letters = tapLetters, digits = tapDigits.slice(0, 2);
+    tapLetters = ''; tapDigits = '';
+    if (letters) {
+      const dest = PLACES.find(p => keyOf(p).startsWith(letters));
+      if (!dest) { buzz([30, 60, 30]); return; }
+      arm({ dest, plat: digits ? String(+digits) : '', time: null, name: cfg.name });
+      buzz(25); peek(dest + (digits ? ' · ' + (+digits) : ''));
+    } else if (digits && armed) {
+      armed.plat = String(+digits); buzz(25); peek('Platform ' + (+digits));
+    }
+  }
+  $('board').addEventListener('click', e => {
+    const el = e.target.closest('.cell');
+    if (!cfg.taps || !el) return;
+    const c = cells[+el.dataset.r][+el.dataset.c];
+    lastBoardTap = Date.now(); clearTimeout(tapTimer);
+    if (/[A-Z]/.test(c.cur) && c.kind !== 'time') tapLetters += c.cur;
+    else if (/\d/.test(c.cur) && (c.kind === 'time' || c.kind === 'plat')) tapDigits += c.cur;
+    else { tapLetters = ''; tapDigits = ''; return; }   // a blank flap starts again
+    tapTimer = setTimeout(resolveTaps, 1200);
+  });
+
   // ---- gestures ----
   function onHold(el, fn, ms) {
     let t = null, sx = 0, sy = 0;
@@ -501,15 +560,17 @@ body {
   function openSheet() {
     $('cfgStation').value = cfg.station; $('cfgDelay').value = String(cfg.delay); $('cfgName').value = cfg.name;
     $('cfgFlap').checked = cfg.flap; $('cfgAnnounce').checked = cfg.announce; $('cfgDot').checked = cfg.dot;
+    $('cfgTaps').checked = cfg.taps; $('cfgPeek').checked = cfg.peek;
     $('armStatus').textContent = armText();
     $('sheet').hidden = false;
   }
   function readSheet() {
     cfg.station = $('cfgStation').value.trim() || DEF.station; cfg.delay = Number($('cfgDelay').value);
     cfg.name = $('cfgName').value.trim(); cfg.flap = $('cfgFlap').checked; cfg.announce = $('cfgAnnounce').checked; cfg.dot = $('cfgDot').checked;
+    cfg.taps = $('cfgTaps').checked; cfg.peek = $('cfgPeek').checked;
     save(); $('stname').textContent = cfg.station;
   }
-  ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot'].forEach(id => $(id).addEventListener('change', readSheet));
+  ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot', 'cfgTaps', 'cfgPeek'].forEach(id => $(id).addEventListener('change', readSheet));
   $('testSound').addEventListener('click', () => { audio(); announce({ t: addMin(new Date(), 3), dest: 'Whitby', plat: '7', calling: ['York', 'Malton', 'Whitby'], name: cfg.name }); });
   $('resetBtn').addEventListener('click', () => { arm(null); rows = freshRows(nRows); show(false); $('armStatus').textContent = armText(); buzz(25); });
   $('close').addEventListener('click', () => { readSheet(); $('sheet').hidden = true; if (armed) arm(armed); });
@@ -518,7 +579,7 @@ body {
   $('stname').textContent = cfg.station;
   layout(); rows = freshRows(nRows); show(true); tick();
   let rt = null;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { layout(); show(true); stripMsg = ''; setStrip(); }, 150); });
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { layout(); if (!(rows[0] && rows[0].forced)) rows = freshRows(nRows); show(true); stripMsg = ''; setStrip(); }, 150); });
   // Keep the screen on while the board sits on the table.
   function wake() { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {} }
   wake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
