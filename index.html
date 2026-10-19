@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Calculator</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Calculator">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; height: 100%; }
+body { margin: 0; overscroll-behavior: none; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<style>
+/* Layout: one-screen calculator, display bottom-aligned above a 4x5 key grid. Deliberately single dark look. */
+:root {
+  --bg: #000;
+  --fg: #fff;
+  --key-num: #333;
+  --key-num-on: #737373;
+  --key-fn: #a5a5a5;
+  --key-fn-on: #d9d9d9;
+  --key-fn-fg: #000;
+  --key-op: #ff9f0a;
+  --key-op-on: #fcc78d;
+  --dim: #8e8e93;
+  --panel: #1c1c1e;
+  --line: #38383a;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Roboto, Arial, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font);
+  overflow: hidden; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.calc {
+  height: 100%; max-width: 440px; margin: 0 auto;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 20px; box-sizing: border-box;
+}
+.display {
+  position: relative; text-align: right; font-weight: 300;
+  font-size: 88px; line-height: 1.1; padding: 0 8px 10px;
+  white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums;
+  min-height: 1.1em;
+}
+.hint {
+  position: absolute; bottom: 2px; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--dim); opacity: .55;
+}
+.hint.plus { left: 8px; }
+.hint.minus { right: 8px; }
+.keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.keys button {
+  aspect-ratio: 1; max-width: 100%; border: 0; border-radius: 50%;
+  font: 400 34px/1 var(--font); color: var(--fg); background: var(--key-num);
+  cursor: pointer; transition: background .25s; touch-action: manipulation;
+  white-space: nowrap; padding: 0;
+}
+.keys button:active { background: var(--key-num-on); transition: none; }
+.keys button.fn { background: var(--key-fn); color: var(--key-fn-fg); font-size: 30px; }
+.keys button.fn:active { background: var(--key-fn-on); }
+.keys button.op { background: var(--key-op); font-size: 40px; }
+.keys button.op:active { background: var(--key-op-on); }
+.keys button.op.sel { background: var(--fg); color: var(--key-op); }
+.keys button.zero { grid-column: span 2; aspect-ratio: auto; border-radius: 999px; text-align: left; padding-left: 12% !important; }
+.keys button:focus-visible { outline: 2px solid var(--key-op); outline-offset: 2px; }
+
+/* Secret settings */
+.sheet {
+  position: fixed; inset: 0; background: var(--panel); overflow-y: auto; z-index: 5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  user-select: text; -webkit-user-select: text;
+}
+.sheet-inner { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; font-size: 16px; line-height: 1.45; }
+.sheet h1 { font-size: 24px; margin: 0; text-wrap: balance; }
+.sheet h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 6px; font-weight: 600; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.row label { flex: 1; min-width: 0; }
+.row select { font: inherit; background: var(--key-num); color: var(--fg); border: 0; border-radius: 8px; padding: 6px 10px; max-width: 60%; }
+.row input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--key-op); }
+.preview { font-size: 34px; font-variant-numeric: tabular-nums; font-weight: 300; letter-spacing: .02em; }
+.sheet ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.sheet p { margin: 0; color: var(--dim); }
+.done { font: 600 17px var(--font); background: var(--key-op); color: #000; border: 0; border-radius: 12px; padding: 14px; cursor: pointer; }
+</style>
+
+<div class="calc">
+  <div class="display" id="display" aria-live="polite">0<span class="hint" id="hint" hidden></span></div>
+  <div class="keys" id="keys">
+    <button class="fn" data-k="ac" id="ac">AC</button>
+    <button class="fn" data-k="neg" style="font-size:26px">+/−</button>
+    <button class="fn" data-k="pct">%</button>
+    <button class="op" data-k="÷">÷</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button class="op" data-k="×">×</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button class="op" data-k="−">−</button>
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button class="op" data-k="+">+</button>
+    <button class="zero" data-k="0">0</button>
+    <button data-k=".">.</button>
+    <button class="op" data-k="=">=</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-inner">
+    <h1>Magician settings</h1>
+    <div>
+      <h2>The reveal right now</h2>
+      <div class="preview" id="preview">–</div>
+      <p id="previewNote"></p>
+    </div>
+    <div>
+      <div class="row"><label for="arm">Trick starts after</label>
+        <select id="arm">
+          <option value="one">One press of =</option>
+          <option value="two">Two presses of =</option>
+        </select></div>
+      <div class="row"><label for="custom">Your own reveal number<br><small style="color:var(--dim)">Leave blank to reveal the date</small></label>
+        <input id="custom" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 7071977" style="font:inherit;background:var(--key-num);color:var(--fg);border:0;border-radius:8px;padding:6px 10px;width:9em;max-width:50%;text-align:right"></div>
+      <div class="row"><label for="fmt">Date format</label>
+        <select id="fmt">
+          <option value="DD MM HH mm">DD MM HH MM (no year)</option>
+          <option value="DD MM YY HH mm">DD MM YY HH MM (UK)</option>
+          <option value="YY MM DD HH mm">YY MM DD HH MM</option>
+          <option value="MM DD YY HH mm">MM DD YY HH MM (US)</option>
+          <option value="YY DD HH mm">YY DD HH MM</option>
+          <option value="DD MM YYYY">DD MM YYYY (date only)</option>
+          <option value="DD MM YY">DD MM YY (date only)</option>
+          <option value="HH mm">HH MM (time only)</option>
+        </select></div>
+      <div class="row"><label for="offset">Add minutes to the time</label>
+        <select id="offset">
+          <option value="0">0</option><option value="1">+1</option><option value="2">+2</option>
+          <option value="3">+3</option><option value="5">+5</option><option value="10">+10</option>
+        </select></div>
+      <div class="row"><label for="h12">12-hour clock</label><input type="checkbox" id="h12"></div>
+      <div class="row"><label for="dot">Show hint dot when armed</label><input type="checkbox" id="dot"></div>
+    </div>
+    <div>
+      <h2>How to perform</h2>
+      <ol>
+        <li>Spectators multiply random numbers as normal, e.g. 4821 × 37 =.</li>
+        <li>The trick is now armed. (If "Trick starts after" is set to two presses, press <b>=</b> again first; the display won't change.) A faint dot appears at the bottom left if they should add, or bottom right if they should subtract.</li>
+        <li>Have them press <b>+</b> (or <b>−</b>), then tap any number key. The first tap shows the whole secret number. Any further taps are ignored.</li>
+        <li>Press <b>=</b>. The display shows the date and time.</li>
+      </ol>
+      <p>The secret number is worked out when they press + or −. If the minute might change before the reveal, use the "Add minutes" setting. AC cancels the trick. To open this screen, press and hold the number display for one second.</p>
+    </div>
+    <button class="done" id="close">Done</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const dispEl = $('display'), hintEl = $('hint');
+
+  // ---- settings (per-device, optional) ----
+  const defaults = { fmt: 'DD MM HH mm', offset: 0, h12: false, dot: true, arm: 'one', custom: '' };
+  let cfg = Object.assign({}, defaults);
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem('datecalc') || '{}')); } catch (e) {}
+  if (cfg.fmt === 'DD MM YY HH mm') cfg.fmt = defaults.fmt;   // switch existing phones to the no-year default
+  const save = () => { try { localStorage.setItem('datecalc', JSON.stringify(cfg)); } catch (e) {} };
+
+  function targetString() {
+    if (cfg.custom) return cfg.custom;          // magician's own number overrides the date
+    const d = new Date(Date.now() + cfg.offset * 60000);
+    let h = d.getHours();
+    if (cfg.h12) h = h % 12 || 12;
+    const p = n => String(n).padStart(2, '0');
+    const parts = { DD: p(d.getDate()), MM: p(d.getMonth() + 1), YY: p(d.getFullYear() % 100),
+                    YYYY: String(d.getFullYear()), HH: p(h), mm: p(d.getMinutes()) };
+    return cfg.fmt.split(' ').map(t => parts[t]).join('');
+  }
+
+  // ---- calculator state ----
+  let disp = '0', acc = null, op = null, fresh = true, lastWasCalc = false;
+  let armed = false, force = null, forceIdx = 0, reveal = null;
+
+  const num = s => parseFloat(s);
+  function fmtNum(n) {
+    if (!isFinite(n)) return 'Error';
+    let s = String(parseFloat(n.toPrecision(12)));
+    if (s.replace(/[-.]/g, '').length > 12) s = n.toExponential(6);
+    return s;
+  }
+  function calc(a, o, b) {
+    switch (o) { case '+': return a + b; case '−': return a - b; case '×': return a * b; case '÷': return a / b; }
+    return b;
+  }
+
+  function render() {
+    dispEl.firstChild.nodeValue = disp;
+    const w = dispEl.clientWidth - 16;
+    const len = disp.length;
+    dispEl.style.fontSize = Math.min(88, Math.floor(w / (len * 0.68))) + 'px';
+    hintEl.hidden = !(armed && force === null && cfg.dot);
+    if (!hintEl.hidden) {
+      const plus = num(disp) < Number(targetString());
+      hintEl.className = 'hint ' + (plus ? 'plus' : 'minus');
+    }
+    document.querySelectorAll('.op').forEach(b => b.classList.toggle('sel', fresh && op === b.dataset.k && b.dataset.k !== '='));
+  }
+
+  function reset() {
+    disp = '0'; acc = null; op = null; fresh = true; lastWasCalc = false;
+    armed = false; force = null; forceIdx = 0; reveal = null;
+  }
+
+  // Work out the secret number. o is '+' or '−', or null to pick whichever works.
+  function startForce(o) {
+    const v = num(disp);
+    reveal = targetString();
+    const N = Number(reveal);
+    if (!o) o = v < N ? '+' : '−';
+    const f = o === '+' ? N - v : v - N;
+    if (f > 0) { force = fmtNum(f); forceIdx = 0; acc = v; op = o; fresh = true; return true; }
+    armed = false; reveal = null;
+    return false;
+  }
+
+  function digit(d) {
+    if (armed && force === null && !op) startForce(null);   // digits straight after "= =" also trigger the trick
+    if (force !== null) {                       // secret entry: any key types the next forced digit
+      if (forceIdx < force.length) { forceIdx = force.length; disp = force; fresh = false; }   // first tap shows the whole number
+      return;
+    }
+    lastWasCalc = false;
+    if (fresh) { disp = d === '.' ? '0.' : d; fresh = false; return; }
+    if (d === '.' && disp.includes('.')) return;
+    if (disp.replace(/[-.]/g, '').length >= 12) return;
+    disp = disp === '0' && d !== '.' ? d : disp + d;
+  }
+
+  function operator(o) {
+    lastWasCalc = false;
+    if (force !== null) return;
+    const v = num(disp);
+    if (armed && (o === '+' || o === '−') && startForce(o)) return;
+    armed = false;
+    if (op && !fresh) { acc = calc(acc, op, v); disp = fmtNum(acc); }
+    else acc = v;
+    op = o; fresh = true;
+  }
+
+  function equals() {
+    if (force !== null) {                       // the reveal
+      const shown = reveal;
+      reset(); disp = shown; return;
+    }
+    if (op) {
+      const r = calc(acc, op, num(disp));
+      disp = fmtNum(r); acc = null; op = null; fresh = true; lastWasCalc = true;
+      if (cfg.arm === 'one') armed = true;
+      return;
+    }
+    if (lastWasCalc) { armed = true; lastWasCalc = false; }   // second "=" arms the trick silently
+  }
+
+  function press(k) {
+    if (/^[0-9.]$/.test(k)) digit(k);
+    else if (k === '=') equals();
+    else if (k === 'ac') reset();
+    else if (k === 'neg') { if (force === null && disp !== '0') { disp = disp.startsWith('-') ? disp.slice(1) : '-' + disp; } }
+    else if (k === 'pct') { if (force === null) { disp = fmtNum(num(disp) / 100); fresh = true; } }
+    else operator(k);
+    render();
+  }
+
+  $('keys').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (b) press(b.dataset.k);
+  });
+  document.addEventListener('keydown', e => {
+    if (!$('sheet').hidden) return;
+    const map = { '*': '×', 'x': '×', '/': '÷', '-': '−', '+': '+', 'Enter': '=', '=': '=', 'Escape': 'ac', 'c': 'ac', '%': 'pct' };
+    const k = /^[0-9.]$/.test(e.key) ? e.key : map[e.key];
+    if (k) { e.preventDefault(); press(k); }
+  });
+
+  // ---- hidden settings: hold the display for 1 second ----
+  let holdTimer = null;
+  const startHold = () => { holdTimer = setTimeout(openSheet, 1000); };
+  const endHold = () => clearTimeout(holdTimer);
+  dispEl.addEventListener('pointerdown', startHold);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => dispEl.addEventListener(t, endHold));
+  dispEl.addEventListener('contextmenu', e => e.preventDefault());
+
+  let previewTimer = null;
+  function updatePreview() {
+    $('preview').textContent = targetString();
+    if (cfg.custom) { $('previewNote').textContent = 'Your own number. Clear the box to go back to the date.'; return; }
+    $('previewNote').textContent = 'Format ' + cfg.fmt.replace(/mm/, 'MM') + (cfg.offset ? ', ' + cfg.offset + ' min ahead' : '') + '.';
+  }
+  function openSheet() {
+    $('fmt').value = cfg.fmt; $('offset').value = String(cfg.offset);
+    $('h12').checked = cfg.h12; $('dot').checked = cfg.dot; $('arm').value = cfg.arm; $('custom').value = cfg.custom;
+    updatePreview(); previewTimer = setInterval(updatePreview, 1000);
+    $('sheet').hidden = false;
+  }
+  function readSheet() {
+    cfg.fmt = $('fmt').value; cfg.offset = Number($('offset').value);
+    cfg.h12 = $('h12').checked; cfg.dot = $('dot').checked; cfg.arm = $('arm').value; save(); updatePreview();
+  }
+  $('custom').addEventListener('input', e => {
+    const v = e.target.value.replace(/\D/g, '').slice(0, 12);
+    e.target.value = v; cfg.custom = v; save(); updatePreview();
+  });
+  ['fmt', 'offset', 'h12', 'dot', 'arm'].forEach(id => $(id).addEventListener('change', readSheet));
+  $('close').addEventListener('click', () => { clearInterval(previewTimer); $('sheet').hidden = true; render(); });
+
+  window.addEventListener('resize', render);
+  try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
+  render();
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
