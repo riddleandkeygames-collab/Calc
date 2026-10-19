@@ -58,6 +58,9 @@ body {
 .armdot { position: absolute; right: 0; top: 0; width: 4px; height: 4px; border-radius: 50%; background: var(--dim); opacity: .55; }
 .board { flex: 1; min-height: 0; background: var(--housing); border-radius: 6px; padding: 10px 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
 .labels, .row { display: grid; gap: 2px; }
+.board.scroll { overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.board.scroll::-webkit-scrollbar { display: none; }
+.board.scroll .labels { position: sticky; top: -10px; background: var(--housing); padding-top: 10px; margin-top: -10px; z-index: 1; }
 .labels span.end { justify-self: end; overflow: visible; }
 .labels span { font: 600 11px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); padding-bottom: 2px; white-space: nowrap; overflow: hidden; }
 .cell {
@@ -166,7 +169,17 @@ body {
           <option value="large">Large</option>
           <option value="standard">Standard</option>
         </select></div>
-      <div class="srow"><label for="cfgTaps">Tap letters on the board to set the destination</label><input type="checkbox" id="cfgTaps"></div>
+      <div class="srow"><label for="cfgInput">Secret tapping<br><small>How you tap in the destination on the board.</small></label>
+        <select id="cfgInput">
+          <option value="rows">Tap whole rows (board by destination)</option>
+          <option value="letters">Tap single letters (board by time)</option>
+          <option value="off">Off (station search only)</option>
+        </select></div>
+      <div class="srow"><label for="cfgOrder">Order of the board by destination</label>
+        <select id="cfgOrder">
+          <option value="za">Z to A</option>
+          <option value="az">A to Z</option>
+        </select></div>
       <div class="srow"><label for="cfgPeek">Confirm the match<br><small>The word “Departures” above the station name briefly changes to the place it found.</small></label><input type="checkbox" id="cfgPeek"></div>
       <div class="srow"><label for="cfgDot">Faint dot by the clock when a reveal is waiting</label><input type="checkbox" id="cfgDot"></div>
       <div class="srow"><label>Start a fresh board and clear the reveal</label><button class="btn" id="resetBtn">Reset board</button></div>
@@ -175,7 +188,8 @@ body {
     <div>
       <h2>Secret controls</h2>
       <ul>
-        <li><b>Tap letters on the board:</b> tap the first three letters of their destination, wherever you can see them on the board, then stop. After a second's pause the app finds the place, and “Departures” changes to its name for 2 seconds so you know it worked. Tap a number in the time or platform column, before or after the letters, to choose the platform.</li>
+        <li><b>Tap rows (board by destination):</b> each row is a different first letter. Tap the row for each of the first three letters of their destination. See “Tapping rows” below.</li>
+        <li><b>Tap letters (board by time):</b> tap the first three letters of their destination, wherever you can see them on the board, then stop. After a second's pause the app finds the place, and “Departures” changes to its name for 2 seconds so you know it worked. Tap a number in the time or platform column, before or after the letters, to choose the platform.</li>
         <li><b>Hold the station name (1 second):</b> opens what looks like a station search. Type the spectator's destination and press Go. The board doesn't change yet.</li>
         <li><b>Double-tap the clock:</b> reveal now.</li>
         <li><b>Hold the clock (1 second):</b> open this screen.</li>
@@ -191,6 +205,18 @@ body {
         <li><code>whitby 7 1947 / sarah</code> &nbsp;adds “Seat reserved for SARAH” to the scrolling strip.</li>
       </ul>
       <p style="margin-top:8px">Any place name works, not only ones in the list. Two-digit numbers are the platform, three or four digits are the time.</p>
+    </div>
+
+    <div>
+      <h2>Tapping rows</h2>
+      <ul>
+        <li>The board opens as “Departures by destination”: one train for each letter, in alphabetical order. It scrolls, like a real one.</li>
+        <li>A tap anywhere on a row counts as that row's first letter. For York, tap the Y row, the O row, then the R row: “You could have gone here, or here, or here…”</li>
+        <li>No station starts with X. For a letter that has no row, tap the column headings (Time, Destination, Plat) instead. It counts as “any letter”: E, headings, E finds Exeter.</li>
+        <li>Pause for a second when you're done. “Departures” changes to the place it found for 2 seconds.</li>
+        <li>At the reveal the board scrolls to the top and rattles round into a normal departures board, with their train first.</li>
+        <li>Reset board (in this screen) brings back the board by destination.</li>
+      </ul>
     </div>
 
     <div>
@@ -215,7 +241,7 @@ body {
       </ol>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 3</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 4</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -227,9 +253,11 @@ body {
   const TOWNS = ['Aberdeen','Aberystwyth','Alnmouth','Ashford','Aviemore','Ayr','Banbury','Bangor','Barrow','Bath Spa','Bedford','Berwick','Birmingham','Blackpool','Bolton','Bournemouth','Bradford','Brighton','Bristol','Buxton','Cambridge','Canterbury','Cardiff','Carlisle','Carmarthen','Chester','Chesterfield','Colchester','Coventry','Crewe','Darlington','Derby','Doncaster','Dover','Dundee','Durham','Edinburgh','Ely','Exeter','Falmouth','Fort William','Glasgow','Gloucester','Grimsby','Guildford','Harrogate','Hastings','Hereford','Holyhead','Huddersfield','Hull','Inverness','Ipswich','Kendal','Kettering','Lancaster','Leeds','Leicester','Lincoln','Liverpool','Llandudno','London Euston','Lowestoft','Manchester','Middlesbrough','Milton Keynes','Morecambe','Newcastle','Newport','Northampton','Norwich','Nottingham','Oban','Oxford','Paignton','Penzance','Perth','Peterborough','Plymouth','Portsmouth','Preston','Reading','Rugby','Salisbury','Scarborough','Sheffield','Shrewsbury','Skegness','Skipton','Southampton','Southport','Stafford','Stirling','Stockport','Stoke','Sunderland','Swansea','Swindon','Taunton','Tenby','Torquay','Truro','Wakefield','Warrington','Weymouth','Whitby','Wigan','Windermere','Wolverhampton','Worcester','York'];
 
   // ---- settings ----
-  const DEF = { station: 'Manchester Piccadilly', delay: 10, name: '', flap: true, announce: true, dot: false, taps: true, peek: true, size: 'large' };
+  const DEF = { station: 'Manchester Piccadilly', delay: 10, name: '', flap: true, announce: true, dot: false, input: 'rows', order: 'za', peek: true, size: 'large' };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('departures-cfg') || '{}')); } catch (e) {}
+  if (cfg.taps === false) cfg.input = 'off';   // older setting
+  delete cfg.taps;
   const save = () => { try { localStorage.setItem('departures-cfg', JSON.stringify(cfg)); } catch (e) {} };
 
   // ---- helpers ----
@@ -265,7 +293,7 @@ body {
   function makeRow(t, others) {
     const used = others.map(r => r.dest);
     const have = used.map(d => fit(d, destW)).join('');
-    const miss = NEED.split('').filter(c => !have.includes(c));
+    const miss = cfg.input === 'letters' ? NEED.split('').filter(c => !have.includes(c)) : [];   // only letter tapping needs every letter
     let best = -1, cands = [];
     TOWNS.forEach(d => {
       if (used.includes(d)) return;
@@ -288,6 +316,21 @@ body {
     rows.length = nRows;
   }
 
+  // ---- board by destination: one train per first letter (no station starts with X) ----
+  const AZ_EXTRA = ['Johnstone', 'Queenborough', 'Ulverston', 'Virginia Water', 'Yeovil'];
+  let view = 'time', azRows = [];
+  const startView = () => cfg.input === 'rows' ? 'az' : 'time';
+  function freshAz() {
+    const pool = TOWNS.concat(AZ_EXTRA);
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWY'.split('');
+    if (cfg.order === 'za') letters.reverse();
+    return letters.map(l => {
+      const dest = pick(pool.filter(d => d[0] === l));
+      const t = addMin(new Date(), 3 + rnd(55));
+      return { t, dest, plat: String(1 + rnd(14)), status: statusFor(t), calling: callingFor(dest), forced: false };
+    });
+  }
+
   // ---- layout: a grid of flap cells sized to the screen ----
   let cols = 24, nRows = 6, destW = 15, hasStatus = false, spec = [], cells = [];
   function layout() {
@@ -298,7 +341,11 @@ body {
     cols = colsFor(large ? 30 : W < 500 ? 14 : 17);
     let cw = (W - (cols - 1) * 2) / cols, ch;
     nRows = Math.max(3, Math.min(16, Math.floor((H + 6) / (Math.round(cw * 1.45) + 6))));
-    if (large && nRows < 7) {
+    if (cfg.input !== 'letters') {
+      // Whole rows are tapped, so no letter coverage is needed; keep rows tall enough for a finger.
+      ch = Math.max(40, Math.round(cw * 1.3));
+      nRows = Math.max(3, Math.min(16, Math.floor((H + 6) / (ch + 6))));
+    } else if (large && nRows < 7) {
       // Big flaps need at least 7 rows so every letter can be on the board; squash them nearer square to fit.
       nRows = 7; ch = Math.floor((H + 6) / 7 - 6);
       if (ch < cw * 0.95) { cols = colsFor(ch / 0.95); cw = (W - (cols - 1) * 2) / cols; }
@@ -322,9 +369,11 @@ body {
       col += w;
     });
     board.querySelectorAll('.row').forEach(r => r.remove());
+    board.classList.toggle('scroll', view === 'az'); board.scrollTop = 0;
     cells = [];
-    for (let r = 0; r < nRows; r++) {
-      const row = document.createElement('div'); row.className = 'row'; row.style.gridTemplateColumns = tpl;
+    const n = view === 'az' ? azRows.length : nRows;
+    for (let r = 0; r < n; r++) {
+      const row = document.createElement('div'); row.className = 'row'; row.style.gridTemplateColumns = tpl; row.dataset.r = r;
       const line = [];
       spec.forEach(([k, w, amber]) => {
         for (let i = 0; i < w; i++) {
@@ -344,9 +393,9 @@ body {
     return spec.map(([k, w]) => k ? fit(v[k], w) : ' '.repeat(w)).join('');
   }
   function show(instant) {
-    topUp();
-    for (let i = 0; i < nRows; i++) {
-      const txt = rowText(rows[i]);
+    const list = view === 'az' ? azRows : (topUp(), rows);
+    for (let i = 0; i < cells.length; i++) {
+      const txt = rowText(list[i]);
       cells[i].forEach((c, j) => {
         c.tgt = txt[j] || ' ';
         if (instant || c.gap) { c.cur = c.tgt; c.el.textContent = c.cur; }
@@ -433,7 +482,7 @@ body {
   // ---- calling-at strip ----
   let stripAnim = null, stripMsg = '';
   function setStrip() {
-    const r = rows[0]; if (!r) return;
+    const r = view === 'az' ? azRows[azRows.length - 1] : rows[0]; if (!r) return;
     const cs = r.calling;
     let msg = 'The ' + hhmm(r.t) + ' to ' + r.dest + ' from platform ' + r.plat + ' is calling at ' +
       cs.slice(0, -1).join(', ') + ' and ' + cs[cs.length - 1] + '.   This train is formed of ' + (r.forced ? 8 : 4 + rnd(2) * 4) + ' coaches.';
@@ -453,7 +502,11 @@ body {
     const now = new Date();
     $('clock').firstChild.nodeValue = hhmm(now) + ':' + pad2(now.getSeconds());
     // A train leaves 40 seconds after its time; forced trains stay until reset.
-    if (rows.length && !rows[0].forced && now - rows[0].t > 40000 && Date.now() - lastBoardTap > 15000) { rows.shift(); show(false); }
+    if (Date.now() - lastBoardTap < 15000) return;   // nothing moves while you're tapping
+    if (view === 'az') {
+      const due = azRows.find(r => now - r.t > 40000);
+      if (due) { due.t = addMin(now, 20 + rnd(40)); due.plat = String(1 + rnd(14)); due.status = statusFor(due.t); show(false); }
+    } else if (rows.length && !rows[0].forced && now - rows[0].t > 40000) { rows.shift(); show(false); }
   }
   setInterval(tick, 1000);
 
@@ -487,6 +540,14 @@ body {
     else t = addMin(now, 3);
     const r = { t, dest: a.dest, plat: a.plat || String(1 + rnd(14)), status: 'On time', calling: callingFor(a.dest), forced: true, name: a.name };
     // The current first train departs; theirs is next, and later trains follow it.
+    if (view === 'az') {
+      // Scroll to the top and turn the visible rows into a normal board by time; the flaps rattle across.
+      const board = $('board');
+      board.scrollTop = 0; board.classList.remove('scroll');
+      board.querySelectorAll('.row').forEach((el, i) => { if (i >= nRows) el.remove(); });
+      cells.length = nRows; view = 'time'; eyebrowText();
+      if (!rows.length) rows = freshRows(nRows);
+    }
     const rest = rows.slice(1).filter(x => x.dest.toUpperCase() !== r.dest.toUpperCase());
     let next = addMin(t, 3 + rnd(5));
     rest.forEach(x => { if (x.t <= t) { x.t = next; x.status = statusFor(next); } next = addMin(x.t, 3 + rnd(6)); });
@@ -519,16 +580,18 @@ body {
   const PLACES = [...new Set(['London','Birmingham','Manchester','Liverpool','Leeds','Glasgow','Edinburgh','Bristol','Sheffield','Newcastle','Cardiff','Belfast','Nottingham','Leicester','Brighton','Southampton','Portsmouth','Plymouth','York','Oxford','Cambridge','Bath','Blackpool','Bournemouth','Paris','Aberdeen','Dundee','Inverness','Swansea','Coventry','Hull','Bradford','Stoke','Derby','Wolverhampton','Sunderland','Norwich','Exeter','Reading','Milton Keynes','Preston','Chester','Lancaster','Carlisle','Durham','Scarborough','Whitby','Harrogate','Bolton','Wigan','Stockport','Warrington','Huddersfield','Wakefield','Doncaster','Middlesbrough','Darlington','Lincoln','Peterborough','Northampton','Ipswich','Colchester','Canterbury','Dover','Hastings','Eastbourne','Southend','Chelmsford','Luton','Watford','Guildford','Windsor','Salisbury','Swindon','Gloucester','Cheltenham','Worcester','Hereford','Shrewsbury','Telford','Stafford','Crewe','Blackburn','Burnley','Rochdale','Oldham','Salford','Southport','Chesterfield','Mansfield','Grimsby','Cleethorpes','Skegness','Torquay','Paignton','Penzance','Truro','Newquay','Falmouth','St Ives','Taunton','Weymouth','Poole','Bognor Regis','Worthing','Margate','Ramsgate','Folkestone','Ashford','Maidstone','Tunbridge Wells','Crawley','Gatwick','Heathrow','Stansted','Bedford','Kettering','Rugby','Leamington Spa','Stratford-upon-Avon','Warwick','Banbury','High Wycombe','Aylesbury','Slough','Basingstoke','Winchester','Weston-super-Mare','Bridgwater','Yeovil','Barnstaple','Newport','Wrexham','Bangor','Holyhead','Llandudno','Aberystwyth','Tenby','Carmarthen','Pembroke','Fishguard','Barry','Merthyr Tydfil','Stirling','Perth','Fort William','Oban','Ayr','Kilmarnock','Dumfries','Berwick','Alnwick','Hexham','Morpeth','Kendal','Windermere','Keswick','Penrith','Barrow','Morecambe','Skipton','Ilkley','Halifax','Rotherham','Barnsley','Worksop','Newark','Grantham','Boston','Kings Lynn','Ely','Bury St Edmunds','Lowestoft','Great Yarmouth','Cromer','Felixstowe','Harwich','Clacton','Bridlington','Filey','Beverley','Selby','Goole','Saltburn','Hartlepool','Stockton','Redcar','Gateshead','Jarrow','Lewes','Chichester','Hove','Horsham','Reigate','Dorking','Epsom','Woking','Farnham','Aldershot','Andover','Romsey','Lymington','Ryde','Matlock','Buxton','Macclesfield','Congleton','Glossop','Wilmslow','Altrincham','Knutsford','Northwich','Runcorn','Widnes','St Helens','Ormskirk','Lytham','Fleetwood','Accrington','Clitheroe','Settle','Hebden Bridge','Todmorden','Bury','Loughborough','Hinckley','Nuneaton','Tamworth','Lichfield','Walsall','Dudley','Kidderminster','Bromsgrove','Redditch','Evesham','Malvern','Ludlow','Oswestry','Welshpool','Pwllheli','Porthmadog','Paisley','Greenock','Motherwell','Hamilton','Falkirk','Livingston','Kirkcaldy','St Andrews','Montrose','Arbroath','Elgin','Nairn','Thurso','Wick','Mallaig','Pitlochry','Aviemore','Dunblane','Gretna','Londonderry','Portrush','Newry','Lisburn','Coleraine','Larne','Brussels','Amsterdam','Lille','Alnmouth','Bath Spa','Bolton','Cardiff','Colchester','Lowestoft','Sunderland'].concat(TOWNS))];
   const keyOf = s => s.toUpperCase().replace(/[^A-Z]/g, '');
   let tapLetters = '', tapDigits = '', tapTimer = null, lastBoardTap = 0, peekTimer = null;
+  const eyebrowText = () => { $('eyebrow').textContent = view === 'az' ? 'Departures by destination' : 'Departures'; };
   function peek(text) {
     if (!cfg.peek) return;
     $('eyebrow').textContent = text;
-    clearTimeout(peekTimer); peekTimer = setTimeout(() => { $('eyebrow').textContent = 'Departures'; }, 2000);
+    clearTimeout(peekTimer); peekTimer = setTimeout(eyebrowText, 2000);
   }
   function resolveTaps() {
     const letters = tapLetters, digits = tapDigits.slice(0, 2);
     tapLetters = ''; tapDigits = '';
-    if (letters) {
-      const dest = PLACES.find(p => keyOf(p).startsWith(letters));
+    if (letters.replace(/\?/g, '')) {
+      const re = new RegExp('^' + letters.replace(/\?/g, '.'));   // ? is “any letter”
+      const dest = PLACES.find(p => re.test(keyOf(p)));
       if (!dest) { buzz([30, 60, 30]); return; }
       arm({ dest, plat: digits ? String(+digits) : '', time: null, name: cfg.name });
       buzz(25); peek(dest + (digits ? ' · ' + (+digits) : ''));
@@ -537,8 +600,16 @@ body {
     }
   }
   $('board').addEventListener('click', e => {
+    if (view === 'az' && cfg.input === 'rows') {
+      const row = e.target.closest('.row'), head = e.target.closest('.labels');
+      if (!row && !head) return;
+      lastBoardTap = Date.now(); clearTimeout(tapTimer);
+      tapLetters += head ? '?' : keyOf(azRows[+row.dataset.r].dest)[0];
+      tapTimer = setTimeout(resolveTaps, 1200);
+      return;
+    }
     const el = e.target.closest('.cell');
-    if (!cfg.taps || !el) return;
+    if (cfg.input !== 'letters' || !el) return;
     const c = cells[+el.dataset.r][+el.dataset.c];
     lastBoardTap = Date.now(); clearTimeout(tapTimer);
     if (/[A-Z]/.test(c.cur) && c.kind !== 'time') tapLetters += c.cur;
@@ -572,28 +643,36 @@ body {
   function openSheet() {
     $('cfgStation').value = cfg.station; $('cfgDelay').value = String(cfg.delay); $('cfgName').value = cfg.name;
     $('cfgFlap').checked = cfg.flap; $('cfgAnnounce').checked = cfg.announce; $('cfgDot').checked = cfg.dot;
-    $('cfgTaps').checked = cfg.taps; $('cfgPeek').checked = cfg.peek; $('cfgSize').value = cfg.size;
+    $('cfgInput').value = cfg.input; $('cfgOrder').value = cfg.order; $('cfgPeek').checked = cfg.peek; $('cfgSize').value = cfg.size;
     $('armStatus').textContent = armText();
     $('sheet').hidden = false;
   }
   function readSheet() {
     cfg.station = $('cfgStation').value.trim() || DEF.station; cfg.delay = Number($('cfgDelay').value);
     cfg.name = $('cfgName').value.trim(); cfg.flap = $('cfgFlap').checked; cfg.announce = $('cfgAnnounce').checked; cfg.dot = $('cfgDot').checked;
-    cfg.taps = $('cfgTaps').checked; cfg.peek = $('cfgPeek').checked;
-    if (cfg.size !== $('cfgSize').value) { cfg.size = $('cfgSize').value; relayout(); }
+    cfg.peek = $('cfgPeek').checked;
+    const changed = cfg.size !== $('cfgSize').value || cfg.input !== $('cfgInput').value || cfg.order !== $('cfgOrder').value;
+    cfg.size = $('cfgSize').value; cfg.input = $('cfgInput').value; cfg.order = $('cfgOrder').value;
+    if (changed) { view = startView(); relayout(); }
     save(); $('stname').textContent = cfg.station;
   }
-  ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot', 'cfgTaps', 'cfgPeek', 'cfgSize'].forEach(id => $(id).addEventListener('change', readSheet));
+  ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot', 'cfgInput', 'cfgOrder', 'cfgPeek', 'cfgSize'].forEach(id => $(id).addEventListener('change', readSheet));
   $('testSound').addEventListener('click', () => { audio(); announce({ t: addMin(new Date(), 3), dest: 'Whitby', plat: '7', calling: ['York', 'Malton', 'Whitby'], name: cfg.name }); });
-  $('resetBtn').addEventListener('click', () => { arm(null); rows = freshRows(nRows); show(false); $('armStatus').textContent = armText(); buzz(25); });
+  $('resetBtn').addEventListener('click', () => { arm(null); view = startView(); rows = []; azRows = freshAz(); relayout(); $('armStatus').textContent = armText(); buzz(25); });
   $('close').addEventListener('click', () => { readSheet(); $('sheet').hidden = true; if (armed) arm(armed); });
 
   // ---- start ----
   $('stname').textContent = cfg.station;
-  layout(); rows = freshRows(nRows); show(true); tick();
+  view = startView(); azRows = freshAz(); eyebrowText();
+  layout(); if (view === 'time') rows = freshRows(nRows); show(true); tick();
   let rt = null;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(relayout, 150); });
-  function relayout() { layout(); if (!(rows[0] && rows[0].forced)) rows = freshRows(nRows); show(true); stripMsg = ''; setStrip(); }
+  function relayout() {
+    if (view === 'az' && azRows.length && (cfg.order === 'za') !== (azRows[0].dest > azRows[azRows.length - 1].dest)) azRows.reverse();
+    eyebrowText(); layout();
+    if (view === 'time' && !(rows[0] && rows[0].forced)) rows = freshRows(nRows);
+    show(true); stripMsg = ''; setStrip();
+  }
   // Keep the screen on while the board sits on the table.
   function wake() { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {} }
   wake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
