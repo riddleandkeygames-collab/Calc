@@ -280,7 +280,8 @@ body {
       </ol>
       <p style="margin-top:8px">The secret number is worked out when they press + or −. If the minute might change before the reveal, use "Add minutes". AC or C cancels the trick.</p>
     </div>
-    <p style="font-size:13px">Version 5</p>
+    <div class="row" style="border-bottom:0"><label>Version 6<br><small id="updNote">Tap to fetch the newest version. Needs signal.</small></label>
+      <button class="small-btn" id="updBtn">Check for update</button></div>
     <button class="done" id="close">Done</button>
   </div>
 </div>
@@ -770,6 +771,19 @@ body {
     if (!wordValue) return;
     cfg.list = listItems().concat(wordValue).join(', ');
     $('list').value = cfg.list; save(); updatePreview();
+  });
+
+  // Fetch the newest version: drop the saved offline copy, then reload from the internet.
+  $('updBtn').addEventListener('click', async () => {
+    $('updBtn').disabled = true; $('updNote').textContent = 'Updating…';
+    try {
+      if (navigator.serviceWorker) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.update().catch(() => {})));
+      }
+      if (window.caches) { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); }
+    } catch (e) {}
+    location.reload();
   });
 
   $('close').addEventListener('click', () => { clearInterval(previewTimer); $('sheet').hidden = true; render(); sRender(); });
