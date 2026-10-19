@@ -52,7 +52,7 @@ body {
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-.calc, .s-calc {
+.calc, .s-calc, .i18 {
   position: relative; height: 100%; max-width: 440px; margin: 0 auto;
   display: flex; flex-direction: column; justify-content: flex-end;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -91,6 +91,18 @@ body {
 .keys button.op.sel { background: var(--fg); color: var(--key-op); }
 .keys button.zero { grid-column: span 2; aspect-ratio: auto; border-radius: 999px; text-align: left; padding-left: 12% !important; }
 .keys button:focus-visible, .s-keys button:focus-visible, .s-bs:focus-visible { outline: 2px solid var(--key-op); outline-offset: 2px; }
+
+/* Newer iPhone look (iOS 18 and later): sum shown as typed, answer below it */
+.i18-display { position: relative; text-align: right; padding: 0 8px 10px; touch-action: none; font-variant-numeric: tabular-nums; }
+.i18-up { font-size: 30px; line-height: 1.25; color: var(--dim); white-space: nowrap; overflow: hidden; min-height: 1.25em; }
+.i18-main { font-size: 80px; font-weight: 300; line-height: 1.1; white-space: nowrap; overflow: hidden; min-height: 1.1em; }
+.keys button.ic { display: flex; align-items: center; justify-content: center; }
+.i18-menu {
+  position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  background: #2c2c2e; border-radius: 14px; padding: 6px 0; min-width: 210px; z-index: 4; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+.i18-menu button { display: flex; justify-content: space-between; width: 100%; background: none; border: 0; color: var(--fg); font: 17px var(--font); padding: 11px 16px; cursor: pointer; }
+.i18-menu button + button { border-top: 1px solid var(--line); }
 
 /* Samsung-style look */
 .s-calc { font-family: var(--s-font); justify-content: stretch; }
@@ -192,6 +204,35 @@ body {
   </div>
 </div>
 
+<div class="i18" id="i18" hidden>
+  <div class="i18-display" id="i18display">
+    <div class="i18-up" id="i18up"></div>
+    <div class="i18-main" id="i18main">0</div>
+    <span class="hint" id="i18hint" hidden></span>
+  </div>
+  <div class="keys" id="i18keys">
+    <button class="fn ic" data-k="ac" id="i18ac">AC</button>
+    <button class="fn" data-k="neg" style="font-size:26px">+/−</button>
+    <button class="fn" data-k="pct">%</button>
+    <button class="op" data-k="÷">÷</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button class="op" data-k="×">×</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button class="op" data-k="−">−</button>
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button class="op" data-k="+">+</button>
+    <button class="ic" data-k="menu" aria-label="Calculator modes"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="3" width="14" height="18" rx="2.5"/><rect x="8" y="6" width="8" height="3.5" rx=".8"/><circle cx="9" cy="13.5" r=".9" fill="currentColor"/><circle cx="12" cy="13.5" r=".9" fill="currentColor"/><circle cx="15" cy="13.5" r=".9" fill="currentColor"/><circle cx="9" cy="17" r=".9" fill="currentColor"/><circle cx="12" cy="17" r=".9" fill="currentColor"/><circle cx="15" cy="17" r=".9" fill="currentColor"/></svg></button>
+    <button data-k="0">0</button>
+    <button data-k=".">.</button>
+    <button class="op" data-k="=">=</button>
+  </div>
+  <div class="i18-menu" id="i18menu" hidden>
+    <button data-m="basic">Basic <span>✓</span></button>
+    <button data-m="sci">Scientific</button>
+    <button data-m="notes">Math Notes</button>
+  </div>
+</div>
+
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-inner">
     <h1>Magician settings</h1>
@@ -206,7 +247,8 @@ body {
       <h2>Calculator</h2>
       <div class="row"><label for="style">Look</label>
         <select id="style">
-          <option value="iphone">iPhone style</option>
+          <option value="ios18">iPhone, iOS 18 and newer</option>
+          <option value="iphone">iPhone, iOS 17 and older</option>
           <option value="samsung">Samsung style</option>
         </select></div>
       <div class="row"><label for="arm">Trick starts after</label>
@@ -280,7 +322,7 @@ body {
       </ol>
       <p style="margin-top:8px">The secret number is worked out when they press + or −. If the minute might change before the reveal, use "Add minutes". AC or C cancels the trick.</p>
     </div>
-    <div class="row" style="border-bottom:0"><label>Version 6<br><small id="updNote">Tap to fetch the newest version. Needs signal.</small></label>
+    <div class="row" style="border-bottom:0"><label>Version 7<br><small id="updNote">Tap to fetch the newest version. Needs signal.</small></label>
       <button class="small-btn" id="updBtn">Check for update</button></div>
     <button class="done" id="close">Done</button>
   </div>
@@ -465,7 +507,7 @@ body {
   // ================= Samsung-style engine =================
   // The sum is kept as a typed expression, e.g. "1234+5678×(2−1)", and evaluated with brackets and precedence.
   const S = { ex: '', justEq: false, result: '', wasCalc: false, armed: false,
-              force: null, forceShown: false, reveal: null, revealShown: false, peak: '' };
+              force: null, forceShown: false, reveal: null, revealShown: false, peak: '', lastEx: '' };
   const OPS = '+−×÷';
   const smain = $('smain'), sprev = $('sprev'), shint = $('shint');
 
@@ -505,7 +547,25 @@ body {
   }
   const toEx = r => String(r).replace(/^-/, '−');
 
+  const BS_ICON = '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8.5 5H20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H8.5L3 12z"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5" stroke-linecap="round"/></svg>';
+  function i18Render() {
+    let up = '', main;
+    if (S.justEq) { up = commas(S.lastEx); main = S.revealShown ? S.result : commas(toEx(S.result)); }
+    else main = S.ex ? commas(S.ex) : '0';
+    const upEl = $('i18up'), mainEl = $('i18main'), w = (mainEl.clientWidth || 300) - 4;
+    upEl.textContent = up; mainEl.textContent = main;
+    mainEl.style.fontSize = Math.max(22, Math.min(80, Math.floor(w / (main.length * 0.6)))) + 'px';
+    upEl.style.fontSize = Math.max(16, Math.min(30, Math.floor(w / (Math.max(up.length, 1) * 0.6)))) + 'px';
+    const ac = $('i18ac'), typing = !S.justEq && S.ex !== '';   // the top-left key is backspace while typing, AC otherwise
+    if (typing && ac.dataset.k !== 'bs') { ac.dataset.k = 'bs'; ac.innerHTML = BS_ICON; ac.setAttribute('aria-label', 'Backspace'); }
+    if (!typing && ac.dataset.k !== 'ac') { ac.dataset.k = 'ac'; ac.textContent = 'AC'; ac.removeAttribute('aria-label'); }
+    const h = $('i18hint');
+    h.hidden = !(S.armed && S.force === null && cfg.dot);
+    if (!h.hidden) h.className = 'hint ' + (num(S.result) < Number(nextReveal()) ? 'plus' : 'minus');
+  }
+
   function sRender() {
+    if (cfg.style === 'ios18') return i18Render();
     let main, prev = '';
     if (S.justEq) main = S.revealShown ? S.result : commas(toEx(S.result));
     else {
@@ -522,7 +582,7 @@ body {
 
   function sReset() {
     Object.assign(S, { ex: '', justEq: false, result: '', wasCalc: false, armed: false,
-                       force: null, forceShown: false, reveal: null, revealShown: false, peak: '' });
+                       force: null, forceShown: false, reveal: null, revealShown: false, peak: '', lastEx: '' });
   }
   function sTrack() { if (S.ex.length >= S.peak.length || !S.peak.startsWith(S.ex)) S.peak = S.ex; }
   function sFromResult() { S.ex = S.result === 'Error' ? '' : toEx(S.result); S.justEq = false; S.revealShown = false; }
@@ -610,15 +670,15 @@ body {
 
   function sEquals() {
     if (S.force !== null) {                     // the reveal
-      const shown = S.reveal;
-      sReset(); S.result = shown; S.justEq = true; S.revealShown = true; consumeReveal(); return;
+      const shown = S.reveal, sum = S.ex;
+      sReset(); S.result = shown; S.lastEx = sum; S.justEq = true; S.revealShown = true; consumeReveal(); return;
     }
     if (S.justEq) { if (S.wasCalc) { S.armed = true; S.wasCalc = false; } return; }   // second "=" arms the trick
     if (!hasOp(S.ex)) return;
     const v = sEval(S.ex);
     if (!isFinite(v)) return;
     logTyped(S.ex); S.peak = '';
-    S.result = fmtNum(v); S.ex = ''; S.justEq = true; S.wasCalc = true; S.revealShown = false;
+    S.lastEx = S.ex; S.result = fmtNum(v); S.ex = ''; S.justEq = true; S.wasCalc = true; S.revealShown = false;
     S.armed = cfg.arm === 'one';
   }
 
@@ -635,13 +695,20 @@ body {
   }
 
   // ================= wiring =================
-  const isSam = () => cfg.style === 'samsung';
+  const isSam = () => cfg.style !== 'iphone';   // the Samsung and newer-iPhone looks share the typed-sum engine
   function applyStyle() {
-    $('ios').hidden = isSam(); $('sam').hidden = !isSam();
+    $('ios').hidden = cfg.style !== 'iphone'; $('sam').hidden = cfg.style !== 'samsung'; $('i18').hidden = cfg.style !== 'ios18';
+    $('i18menu').hidden = true;
     reset(); sReset(); render(); sRender();
   }
   $('keys').addEventListener('click', e => { const b = e.target.closest('button'); if (b) press(b.dataset.k); });
   $('sam').addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (b) sPress(b.dataset.k); });
+  $('i18keys').addEventListener('click', e => {
+    const b = e.target.closest('button[data-k]'); if (!b) return;
+    if (b.dataset.k === 'menu') { $('i18menu').hidden = !$('i18menu').hidden; return; }
+    $('i18menu').hidden = true; sPress(b.dataset.k);
+  });
+  $('i18menu').addEventListener('click', () => { $('i18menu').hidden = true; });   // only Basic is real; other modes just close the menu
   document.addEventListener('keydown', e => {
     if (!$('sheet').hidden) return;
     const map = { '*': '×', 'x': '×', '/': '÷', '-': '−', '+': '+', 'Enter': '=', '=': '=', 'Escape': 'ac', 'c': 'ac',
@@ -698,7 +765,7 @@ body {
     el.addEventListener('pointercancel', end);
     el.addEventListener('contextmenu', e => e.preventDefault());
   }
-  addGestures(dispEl); addGestures($('sdisplay'));
+  addGestures(dispEl); addGestures($('sdisplay')); addGestures($('i18display'));
 
   // ---- peek: hold the = key; a normal tap still works as = ----
   document.querySelectorAll('button[data-k="="]').forEach(b => {
