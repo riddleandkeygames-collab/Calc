@@ -20,7 +20,7 @@ body { margin: 0; overscroll-behavior: none; }
 </head>
 <body>
 <style>
-/* Layout: one-screen calculator, display bottom-aligned above a 4x5 key grid. Deliberately single dark look. */
+/* Layout: one-screen calculator, display above a 4x5 key grid. Two looks (iPhone-style, Samsung-style). Deliberately single dark look. */
 :root {
   --bg: #000;
   --fg: #fff;
@@ -34,18 +34,26 @@ body { margin: 0; overscroll-behavior: none; }
   --dim: #8e8e93;
   --panel: #1c1c1e;
   --line: #38383a;
+  --s-key: #1c1c1c;
+  --s-key-on: #3a3a3a;
+  --s-green: #5bc35f;
+  --s-eq: #3e9d47;
+  --s-red: #ff6151;
+  --s-dim: #8a8a8a;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Roboto, Arial, sans-serif;
+  --s-font: system-ui, Roboto, "Segoe UI", Arial, sans-serif;
   color-scheme: dark;
 }
 html, body { height: 100%; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--fg); font-family: var(--font);
   overflow: hidden; user-select: none; -webkit-user-select: none;
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-.calc {
-  height: 100%; max-width: 440px; margin: 0 auto;
+.calc, .s-calc {
+  position: relative; height: 100%; max-width: 440px; margin: 0 auto;
   display: flex; flex-direction: column; justify-content: flex-end;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -55,7 +63,7 @@ body {
   position: relative; text-align: right; font-weight: 300;
   font-size: 88px; line-height: 1.1; padding: 0 8px 10px;
   white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums;
-  min-height: 1.1em;
+  min-height: 1.1em; touch-action: none;
 }
 .hint {
   position: absolute; bottom: 2px; width: 4px; height: 4px; border-radius: 50%;
@@ -63,6 +71,11 @@ body {
 }
 .hint.plus { left: 8px; }
 .hint.minus { right: 8px; }
+.peek {
+  position: absolute; top: calc(8px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+  font: 13px/1.4 var(--font); color: var(--dim); opacity: .7; z-index: 3; pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
 .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .keys button {
   aspect-ratio: 1; max-width: 100%; border: 0; border-radius: 50%;
@@ -77,7 +90,29 @@ body {
 .keys button.op:active { background: var(--key-op-on); }
 .keys button.op.sel { background: var(--fg); color: var(--key-op); }
 .keys button.zero { grid-column: span 2; aspect-ratio: auto; border-radius: 999px; text-align: left; padding-left: 12% !important; }
-.keys button:focus-visible { outline: 2px solid var(--key-op); outline-offset: 2px; }
+.keys button:focus-visible, .s-keys button:focus-visible, .s-bs:focus-visible { outline: 2px solid var(--key-op); outline-offset: 2px; }
+
+/* Samsung-style look */
+.s-calc { font-family: var(--s-font); justify-content: stretch; }
+.s-display {
+  position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end;
+  text-align: right; padding: 0 6px 14px; touch-action: none; overflow: hidden;
+}
+.s-main { font-size: 52px; line-height: 1.15; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; min-height: 1.15em; }
+.s-prev { font-size: 32px; line-height: 1.3; color: var(--s-dim); min-height: 1.3em; font-variant-numeric: tabular-nums; }
+.s-bar { display: flex; justify-content: flex-end; align-items: center; padding: 4px 6px 10px; border-bottom: 1px solid #2c2c2c; margin-bottom: 14px; }
+.s-bs { background: none; border: 0; padding: 6px; cursor: pointer; color: var(--s-green); display: flex; }
+.s-bs svg { width: 30px; height: 30px; }
+.s-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.s-keys button {
+  aspect-ratio: 1; max-width: 100%; border: 0; border-radius: 50%; padding: 0; white-space: nowrap;
+  font: 400 32px/1 var(--s-font); color: var(--fg); background: var(--s-key); cursor: pointer;
+  transition: background .2s; touch-action: manipulation;
+}
+.s-keys button:active { background: var(--s-key-on); transition: none; }
+.s-keys button.g { color: var(--s-green); }
+.s-keys button.r { color: var(--s-red); }
+.s-keys button.eq { background: var(--s-eq); color: #fff; font-size: 38px; }
 
 /* Secret settings */
 .sheet {
@@ -88,20 +123,28 @@ body {
   padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   user-select: text; -webkit-user-select: text;
 }
-.sheet-inner { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; font-size: 16px; line-height: 1.45; }
+.sheet-inner { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; font-size: 16px; line-height: 1.45; }
 .sheet h1 { font-size: 24px; margin: 0; text-wrap: balance; }
 .sheet h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 6px; font-weight: 600; }
-.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .row label { flex: 1; min-width: 0; }
-.row select { font: inherit; background: var(--key-num); color: var(--fg); border: 0; border-radius: 8px; padding: 6px 10px; max-width: 60%; }
+.row small { color: var(--dim); }
+.row select, .row input[type=text] { font: inherit; background: var(--key-num); color: var(--fg); border: 0; border-radius: 8px; padding: 6px 10px; max-width: 60%; }
+.row input[type=text] { width: 10em; text-align: right; }
+.row input.wide { width: 100%; max-width: none; text-align: left; box-sizing: border-box; }
 .row input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--key-op); }
-.preview { font-size: 34px; font-variant-numeric: tabular-nums; font-weight: 300; letter-spacing: .02em; }
-.sheet ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.small-btn { font: 600 14px var(--font); background: var(--key-num); color: var(--fg); border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.preview { font-size: 34px; font-variant-numeric: tabular-nums; font-weight: 300; letter-spacing: .02em; word-break: break-all; }
+.sheet ol, .sheet ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .sheet p { margin: 0; color: var(--dim); }
+.log { font-variant-numeric: tabular-nums; }
+.log li span { color: var(--dim); font-size: 13px; }
 .done { font: 600 17px var(--font); background: var(--key-op); color: #000; border: 0; border-radius: 12px; padding: 14px; cursor: pointer; }
 </style>
 
-<div class="calc">
+<div class="peek" id="peek" hidden></div>
+
+<div class="calc" id="ios">
   <div class="display" id="display" aria-live="polite">0<span class="hint" id="hint" hidden></span></div>
   <div class="keys" id="keys">
     <button class="fn" data-k="ac" id="ac">AC</button>
@@ -120,22 +163,77 @@ body {
   </div>
 </div>
 
+<div class="s-calc" id="sam" hidden>
+  <div class="s-display" id="sdisplay">
+    <div class="s-main" id="smain"></div>
+    <div class="s-prev" id="sprev"></div>
+    <span class="hint" id="shint" hidden></span>
+  </div>
+  <div class="s-bar">
+    <button class="s-bs" data-k="bs" aria-label="Backspace">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M8.5 5H20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H8.5L3 12z"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="s-keys">
+    <button class="r" data-k="ac">C</button>
+    <button class="g" data-k="paren" style="font-size:28px">( )</button>
+    <button class="g" data-k="pct">%</button>
+    <button class="g" data-k="÷" style="font-size:38px">÷</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button class="g" data-k="×" style="font-size:38px">×</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button class="g" data-k="−" style="font-size:38px">−</button>
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button class="g" data-k="+" style="font-size:38px">+</button>
+    <button data-k="neg" style="font-size:26px">+/−</button>
+    <button data-k="0">0</button>
+    <button data-k=".">.</button>
+    <button class="eq" data-k="=">=</button>
+  </div>
+</div>
+
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-inner">
     <h1>Magician settings</h1>
+
     <div>
-      <h2>The reveal right now</h2>
+      <h2>Next reveal</h2>
       <div class="preview" id="preview">–</div>
       <p id="previewNote"></p>
     </div>
+
     <div>
+      <h2>Calculator</h2>
+      <div class="row"><label for="style">Look</label>
+        <select id="style">
+          <option value="iphone">iPhone style</option>
+          <option value="samsung">Samsung style</option>
+        </select></div>
       <div class="row"><label for="arm">Trick starts after</label>
         <select id="arm">
           <option value="one">One press of =</option>
           <option value="two">Two presses of =</option>
         </select></div>
-      <div class="row"><label for="custom">Your own reveal number<br><small style="color:var(--dim)">Leave blank to reveal the date</small></label>
-        <input id="custom" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 7071977" style="font:inherit;background:var(--key-num);color:var(--fg);border:0;border-radius:8px;padding:6px 10px;width:9em;max-width:50%;text-align:right"></div>
+      <div class="row"><label for="dot">Show hint dot when armed</label><input type="checkbox" id="dot"></div>
+    </div>
+
+    <div>
+      <h2>What to reveal</h2>
+      <div class="row" id="liveRow" hidden><label>Live reveal: <b id="liveVal"></b><br><small>Set by swiping up. Used for the next trick only.</small></label>
+        <button class="small-btn" id="liveClear">Clear</button></div>
+      <div class="row"><label for="list">Your own reveal numbers<br><small>Separate with commas. Each trick uses the next one. Leave blank to reveal the date.</small></label>
+        <input id="list" class="wide" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 7071977, 5318008"></div>
+      <div class="row"><label for="once">Use each number once, then go back to the date</label><input type="checkbox" id="once"></div>
+      <div class="row"><label for="word">Upside-down word<br><small>Letters you can use: B E G H I L O S Z</small></label>
+        <input id="word" type="text" autocomplete="off" autocapitalize="characters" placeholder="e.g. HELLO">
+        <div style="flex-basis:100%;display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <span id="wordNum" style="color:var(--dim)">Type a word to see its number.</span>
+          <button class="small-btn" id="wordAdd" disabled>Add to list</button>
+        </div></div>
+    </div>
+
+    <div>
+      <h2>Date and time</h2>
       <div class="row"><label for="fmt">Date format</label>
         <select id="fmt">
           <option value="DD MM HH mm">DD MM HH MM (no year)</option>
@@ -153,17 +251,34 @@ body {
           <option value="3">+3</option><option value="5">+5</option><option value="10">+10</option>
         </select></div>
       <div class="row"><label for="h12">12-hour clock</label><input type="checkbox" id="h12"></div>
-      <div class="row"><label for="dot">Show hint dot when armed</label><input type="checkbox" id="dot"></div>
     </div>
+
+    <div>
+      <h2>Peek: numbers typed</h2>
+      <ul class="log" id="peekLog"></ul>
+      <div style="margin-top:8px"><button class="small-btn" id="peekClear">Clear list</button></div>
+    </div>
+
+    <div>
+      <h2>Secret gestures on the number display</h2>
+      <ul>
+        <li><b>Hold 1 second:</b> open this screen.</li>
+        <li><b>Swipe down:</b> peek. The last numbers typed appear faintly at the top for 3 seconds.</li>
+        <li><b>Swipe up:</b> live reveal. If a number is on the display, it becomes the reveal for the next trick and the calculator clears. If the display is clear, the last number a spectator typed is used instead.</li>
+        <li><b>Swipe left or right:</b> cancel the trick. The calculator then works normally, and the sum still adds up. On the iPhone style, when the trick isn't armed, this deletes the last digit like a real iPhone.</li>
+      </ul>
+      <p style="margin-top:8px">The phone gives a short buzz when a gesture works, and a double buzz when there's nothing to use.</p>
+    </div>
+
     <div>
       <h2>How to perform</h2>
       <ol>
-        <li>Spectators multiply random numbers as normal, e.g. 4821 × 37 =.</li>
+        <li>Spectators do any sum, e.g. 54 × 54 × 54 =.</li>
         <li>The trick is now armed. (If "Trick starts after" is set to two presses, press <b>=</b> again first; the display won't change.) A faint dot appears at the bottom left if they should add, or bottom right if they should subtract.</li>
         <li>Have them press <b>+</b> (or <b>−</b>), then tap any number key. The first tap shows the whole secret number. Any further taps are ignored.</li>
-        <li>Press <b>=</b>. The display shows the date and time.</li>
+        <li>Press <b>=</b>. The display shows the reveal.</li>
       </ol>
-      <p>The secret number is worked out when they press + or −. If the minute might change before the reveal, use the "Add minutes" setting. AC cancels the trick. To open this screen, press and hold the number display for one second.</p>
+      <p style="margin-top:8px">The secret number is worked out when they press + or −. If the minute might change before the reveal, use "Add minutes". AC or C cancels the trick.</p>
     </div>
     <button class="done" id="close">Done</button>
   </div>
@@ -173,16 +288,27 @@ body {
 (function () {
   const $ = id => document.getElementById(id);
   const dispEl = $('display'), hintEl = $('hint');
+  const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
 
   // ---- settings (per-device, optional) ----
-  const defaults = { fmt: 'DD MM HH mm', offset: 0, h12: false, dot: true, arm: 'one', custom: '' };
+  const defaults = { fmt: 'DD MM HH mm', offset: 0, h12: false, dot: true, arm: 'one',
+                     list: '', once: false, idx: 0, live: '', style: 'iphone', log: [] };
   let cfg = Object.assign({}, defaults);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('datecalc') || '{}')); } catch (e) {}
   if (cfg.fmt === 'DD MM YY HH mm') cfg.fmt = defaults.fmt;   // switch existing phones to the no-year default
+  if (cfg.custom) { cfg.list = cfg.custom; delete cfg.custom; } // older single reveal number becomes the list
   const save = () => { try { localStorage.setItem('datecalc', JSON.stringify(cfg)); } catch (e) {} };
 
-  function targetString() {
-    if (cfg.custom) return cfg.custom;          // magician's own number overrides the date
+  // ---- what gets revealed ----
+  function cleanNum(s) {
+    s = String(s).replace(/[^\d.]/g, '');
+    const i = s.indexOf('.');
+    if (i >= 0) s = s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, '');
+    s = s.replace(/^\./, '0.').replace(/\.$/, '');
+    return s.replace(/\./, '').length > 12 ? '' : s;
+  }
+  const listItems = () => cfg.list.split(/[,\s]+/).map(cleanNum).filter(Boolean);
+  function dateString() {
     const d = new Date(Date.now() + cfg.offset * 60000);
     let h = d.getHours();
     if (cfg.h12) h = h % 12 || 12;
@@ -191,12 +317,39 @@ body {
                     YYYY: String(d.getFullYear()), HH: p(h), mm: p(d.getMinutes()) };
     return cfg.fmt.split(' ').map(t => parts[t]).join('');
   }
+  function nextReveal() {
+    if (cfg.live) return cfg.live;
+    const items = listItems();
+    if (items.length) return items[cfg.idx % items.length];
+    return dateString();
+  }
+  function consumeReveal() {                    // called once a reveal has been shown
+    if (cfg.live) { cfg.live = ''; save(); return; }
+    const items = listItems();
+    if (!items.length) return;
+    const i = cfg.idx % items.length;
+    if (cfg.once) { items.splice(i, 1); cfg.list = items.join(', '); cfg.idx = items.length ? i % items.length : 0; }
+    else cfg.idx = (i + 1) % items.length;
+    save();
+  }
 
-  // ---- calculator state ----
-  let disp = '0', expr = [], op = null, fresh = true, lastWasCalc = false;
-  let armed = false, force = null, forceIdx = 0, reveal = null;
+  // ---- peek log ----
+  function logTyped(s) {
+    if (!s || !/\d/.test(s)) return;
+    cfg.log.push({ v: s, t: Date.now() });
+    if (cfg.log.length > 20) cfg.log = cfg.log.slice(-20);
+    save();
+  }
+  function lastTypedNumber() {
+    for (let i = cfg.log.length - 1; i >= 0; i--) {
+      const v = cfg.log[i].v.replace(/,/g, '');
+      if (/^[\d.]+$/.test(v)) return cleanNum(v);
+    }
+    return '';
+  }
 
-  const num = s => parseFloat(s);
+  // ---- shared maths ----
+  const num = s => parseFloat(String(s).replace(/−/g, '-').replace(/,/g, ''));
   function fmtNum(n) {
     if (!isFinite(n)) return 'Error';
     let s = String(parseFloat(n.toPrecision(12)));
@@ -220,16 +373,17 @@ body {
     return r;
   }
 
+  // ================= iPhone-style engine =================
+  let disp = '0', expr = [], op = null, fresh = true, lastWasCalc = false;
+  let armed = false, force = null, forceIdx = 0, reveal = null;
+
   function render() {
     dispEl.firstChild.nodeValue = disp;
     const w = dispEl.clientWidth - 16;
     const len = disp.length;
     dispEl.style.fontSize = Math.min(88, Math.floor(w / (len * 0.68))) + 'px';
     hintEl.hidden = !(armed && force === null && cfg.dot);
-    if (!hintEl.hidden) {
-      const plus = num(disp) < Number(targetString());
-      hintEl.className = 'hint ' + (plus ? 'plus' : 'minus');
-    }
+    if (!hintEl.hidden) hintEl.className = 'hint ' + (num(disp) < Number(nextReveal()) ? 'plus' : 'minus');
     document.querySelectorAll('.op').forEach(b => b.classList.toggle('sel', fresh && op === b.dataset.k && b.dataset.k !== '='));
   }
 
@@ -241,7 +395,7 @@ body {
   // Work out the secret number. o is '+' or '−', or null to pick whichever works.
   function startForce(o) {
     const v = num(disp);
-    reveal = targetString();
+    reveal = nextReveal();
     const N = Number(reveal);
     if (!o) o = v < N ? '+' : '−';
     const f = o === '+' ? N - v : v - N;
@@ -251,8 +405,8 @@ body {
   }
 
   function digit(d) {
-    if (armed && force === null && !op) startForce(null);   // digits straight after "= =" also trigger the trick
-    if (force !== null) {                       // secret entry: any key types the next forced digit
+    if (armed && force === null && !op) startForce(null);   // digits straight after "=" also trigger the trick
+    if (force !== null) {
       if (forceIdx < force.length) { forceIdx = force.length; disp = force; fresh = false; }   // first tap shows the whole number
       return;
     }
@@ -269,6 +423,7 @@ body {
     const v = num(disp);
     if (armed && (o === '+' || o === '−') && startForce(o)) return;
     armed = false;
+    if (!fresh) logTyped(disp);
     if (op && fresh) expr[expr.length - 1] = o;   // changed their mind about the operator
     else if (op) expr.push(v, o);
     else expr = [v, o];
@@ -282,9 +437,10 @@ body {
   function equals() {
     if (force !== null) {                       // the reveal
       const shown = reveal;
-      reset(); disp = shown; return;
+      reset(); disp = shown; consumeReveal(); return;
     }
     if (op) {
+      if (!fresh) logTyped(disp);
       const r = evaluate(expr.concat(num(disp)));
       disp = fmtNum(r); expr = []; op = null; fresh = true; lastWasCalc = true;
       if (cfg.arm === 'one') armed = true;
@@ -296,57 +452,321 @@ body {
   function press(k) {
     if (/^[0-9.]$/.test(k)) digit(k);
     else if (k === '=') equals();
-    else if (k === 'ac') reset();
+    else if (k === 'ac') { if (!fresh && force === null) logTyped(disp); reset(); }
     else if (k === 'neg') { if (force === null && disp !== '0') { disp = disp.startsWith('-') ? disp.slice(1) : '-' + disp; } }
     else if (k === 'pct') { if (force === null) { disp = fmtNum(num(disp) / 100); fresh = true; } }
+    else if (k === 'bs') { if (!fresh && force === null) { disp = disp.length > 1 && disp !== '-0' ? disp.slice(0, -1) : '0'; if (disp === '-') disp = '0'; } }
     else operator(k);
     render();
   }
 
-  $('keys').addEventListener('click', e => {
-    const b = e.target.closest('button'); if (b) press(b.dataset.k);
-  });
+  // ================= Samsung-style engine =================
+  // The sum is kept as a typed expression, e.g. "1234+5678×(2−1)", and evaluated with brackets and precedence.
+  const S = { ex: '', justEq: false, result: '', wasCalc: false, armed: false,
+              force: null, forceShown: false, reveal: null, revealShown: false, peak: '' };
+  const OPS = '+−×÷';
+  const smain = $('smain'), sprev = $('sprev'), shint = $('shint');
+
+  function sEval(ex) {
+    let i = 0;
+    const peek = () => ex[i];
+    function expr() {
+      let v = term();
+      while (peek() === '+' || peek() === '−') { const o = ex[i++]; v = calc(v, o, term()); }
+      return v;
+    }
+    function term() {
+      let v = factor();
+      while (peek() === '×' || peek() === '÷') { const o = ex[i++]; v = calc(v, o, factor()); }
+      return v;
+    }
+    function factor() {
+      if (peek() === '−') { i++; return -factor(); }
+      let v;
+      if (peek() === '(') { i++; v = expr(); if (peek() === ')') i++; }
+      else {
+        const m = /^\d*\.?\d+|^\d+\.?/.exec(ex.slice(i));
+        if (!m) throw new Error('bad');
+        i += m[0].length; v = parseFloat(m[0]);
+      }
+      while (peek() === '%') { i++; v /= 100; }
+      return v;
+    }
+    try { const v = expr(); return i === ex.length ? v : NaN; } catch (e) { return NaN; }
+  }
+  const hasOp = ex => /[\d.)%][+−×÷]/.test(ex) || /%/.test(ex);
+  function commas(s) {
+    return String(s).replace(/\d+(\.\d+)?/g, m => {
+      const [a, b] = m.split('.');
+      return a.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (b !== undefined ? '.' + b : '');
+    }).replace(/(\d)\.$/, '$1.');
+  }
+  const toEx = r => String(r).replace(/^-/, '−');
+
+  function sRender() {
+    let main, prev = '';
+    if (S.justEq) main = S.revealShown ? S.result : commas(toEx(S.result));
+    else {
+      main = commas(S.ex);
+      if (S.force === null && hasOp(S.ex)) { const v = sEval(S.ex); if (isFinite(v)) prev = commas(toEx(fmtNum(v))); }
+    }
+    smain.textContent = main.replace(/([+−×÷])/g, '$1\u200B');   // let long sums wrap after a sign, not mid-number
+    sprev.textContent = prev;
+    const w = smain.clientWidth || 300;
+    smain.style.fontSize = Math.max(34, Math.min(52, Math.floor(w / (Math.max(main.length, 1) * 0.58)))) + 'px';
+    shint.hidden = !(S.armed && S.force === null && cfg.dot);
+    if (!shint.hidden) shint.className = 'hint ' + (num(S.result) < Number(nextReveal()) ? 'plus' : 'minus');
+  }
+
+  function sReset() {
+    Object.assign(S, { ex: '', justEq: false, result: '', wasCalc: false, armed: false,
+                       force: null, forceShown: false, reveal: null, revealShown: false, peak: '' });
+  }
+  function sTrack() { if (S.ex.length >= S.peak.length || !S.peak.startsWith(S.ex)) S.peak = S.ex; }
+  function sFromResult() { S.ex = S.result === 'Error' ? '' : toEx(S.result); S.justEq = false; S.revealShown = false; }
+
+  function sStartForce(o) {
+    const v = num(S.result);
+    S.reveal = nextReveal();
+    const N = Number(S.reveal);
+    if (!o) o = v < N ? '+' : '−';
+    const f = o === '+' ? N - v : v - N;
+    if (f > 0) { S.force = fmtNum(f); S.forceShown = false; S.ex = toEx(S.result) + o; S.justEq = false; S.peak = ''; return true; }
+    S.armed = false; S.reveal = null;
+    return false;
+  }
+
+  function sDigit(d) {
+    if (S.armed && S.force === null && S.justEq) sStartForce(null);
+    if (S.force !== null) { if (!S.forceShown) { S.ex += S.force; S.forceShown = true; } return; }
+    if (S.justEq) { S.ex = ''; S.justEq = false; S.revealShown = false; }
+    S.armed = false; S.wasCalc = false;
+    const last = S.ex.slice(-1);
+    if (last === ')' || last === '%') S.ex += '×';
+    const cur = (/[\d.]*$/.exec(S.ex) || [''])[0];
+    if (d === '.') { if (cur.includes('.')) return; S.ex += cur === '' ? '0.' : '.'; }
+    else {
+      if (cur.replace('.', '').length >= 15) return;
+      S.ex = cur === '0' ? S.ex.slice(0, -1) + d : S.ex + d;
+    }
+    sTrack();
+  }
+
+  function sOperator(o) {
+    if (S.force !== null) return;
+    if (S.justEq) {
+      if (S.armed && (o === '+' || o === '−') && sStartForce(o)) return;
+      sFromResult();
+    }
+    S.armed = false; S.wasCalc = false;
+    const last = S.ex.slice(-1);
+    if (S.ex === '') { if (o === '−') S.ex = '−'; return; }
+    if (last === '(') { if (o === '−') S.ex += '−'; return; }
+    if (OPS.includes(last)) { if (S.ex.length > 1) S.ex = S.ex.slice(0, -1) + o; return; }
+    S.ex += o; sTrack();
+  }
+
+  function sParen() {
+    if (S.force !== null) return;
+    if (S.justEq) { sFromResult(); S.ex += '×('; S.armed = false; sTrack(); return; }
+    S.armed = false; S.wasCalc = false;
+    const open = (S.ex.match(/\(/g) || []).length, close = (S.ex.match(/\)/g) || []).length;
+    const last = S.ex.slice(-1);
+    if (S.ex === '' || (OPS + '(').includes(last)) S.ex += '(';
+    else if (open > close) S.ex += ')';
+    else S.ex += '×(';
+    sTrack();
+  }
+
+  function sPct() {
+    if (S.force !== null) return;
+    if (S.justEq) sFromResult();
+    S.armed = false; S.wasCalc = false;
+    if (/[\d)]$/.test(S.ex)) { S.ex += '%'; sTrack(); }
+  }
+
+  function sNeg() {
+    if (S.force !== null) return;
+    if (S.justEq) sFromResult();
+    S.armed = false; S.wasCalc = false;
+    const m = /(\(−)?([\d.]+)$/.exec(S.ex);
+    if (m && m[1]) S.ex = S.ex.slice(0, S.ex.length - m[0].length) + m[2];
+    else if (m) S.ex = S.ex.slice(0, S.ex.length - m[2].length) + '(−' + m[2];
+    else { const last = S.ex.slice(-1); if (last === ')' || last === '%') S.ex += '×'; S.ex += '(−'; }
+    sTrack();
+  }
+
+  function sBackspace() {
+    if (S.force !== null) {                     // let them "delete" the secret number; a new tap brings it back
+      if (S.forceShown) { S.ex = S.ex.slice(0, -S.force.length); S.forceShown = false; }
+      return;
+    }
+    if (S.justEq || !S.ex) return;
+    S.ex = S.ex.slice(0, -1);
+    if (!S.ex) { logTyped(S.peak); S.peak = ''; }
+  }
+
+  function sEquals() {
+    if (S.force !== null) {                     // the reveal
+      const shown = S.reveal;
+      sReset(); S.result = shown; S.justEq = true; S.revealShown = true; consumeReveal(); return;
+    }
+    if (S.justEq) { if (S.wasCalc) { S.armed = true; S.wasCalc = false; } return; }   // second "=" arms the trick
+    if (!hasOp(S.ex)) return;
+    const v = sEval(S.ex);
+    if (!isFinite(v)) return;
+    logTyped(S.ex); S.peak = '';
+    S.result = fmtNum(v); S.ex = ''; S.justEq = true; S.wasCalc = true; S.revealShown = false;
+    S.armed = cfg.arm === 'one';
+  }
+
+  function sPress(k) {
+    if (/^[0-9.]$/.test(k)) sDigit(k);
+    else if (k === '=') sEquals();
+    else if (k === 'ac') { if (S.force === null) logTyped(S.peak); sReset(); }
+    else if (k === 'paren') sParen();
+    else if (k === 'pct') sPct();
+    else if (k === 'neg') sNeg();
+    else if (k === 'bs') sBackspace();
+    else sOperator(k);
+    sRender();
+  }
+
+  // ================= wiring =================
+  const isSam = () => cfg.style === 'samsung';
+  function applyStyle() {
+    $('ios').hidden = isSam(); $('sam').hidden = !isSam();
+    reset(); sReset(); render(); sRender();
+  }
+  $('keys').addEventListener('click', e => { const b = e.target.closest('button'); if (b) press(b.dataset.k); });
+  $('sam').addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (b) sPress(b.dataset.k); });
   document.addEventListener('keydown', e => {
     if (!$('sheet').hidden) return;
-    const map = { '*': '×', 'x': '×', '/': '÷', '-': '−', '+': '+', 'Enter': '=', '=': '=', 'Escape': 'ac', 'c': 'ac', '%': 'pct' };
+    const map = { '*': '×', 'x': '×', '/': '÷', '-': '−', '+': '+', 'Enter': '=', '=': '=', 'Escape': 'ac', 'c': 'ac',
+                  '%': 'pct', 'Backspace': 'bs', '(': 'paren', ')': 'paren' };
     const k = /^[0-9.]$/.test(e.key) ? e.key : map[e.key];
-    if (k) { e.preventDefault(); press(k); }
+    if (k) { e.preventDefault(); isSam() ? sPress(k) : press(k); }
   });
 
-  // ---- hidden settings: hold the display for 1 second ----
-  let holdTimer = null;
-  const startHold = () => { holdTimer = setTimeout(openSheet, 1000); };
-  const endHold = () => clearTimeout(holdTimer);
-  dispEl.addEventListener('pointerdown', startHold);
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => dispEl.addEventListener(t, endHold));
-  dispEl.addEventListener('contextmenu', e => e.preventDefault());
+  // ---- secret gestures on the display ----
+  let peekTimer = null;
+  function showPeek() {
+    const items = cfg.log.slice(-3).reverse().map(x => x.v);
+    if (!items.length) { buzz([30, 60, 30]); return; }
+    $('peek').textContent = items.join('   ·   ');
+    $('peek').hidden = false; buzz(25);
+    clearTimeout(peekTimer); peekTimer = setTimeout(() => { $('peek').hidden = true; }, 3000);
+  }
+  function liveReveal() {
+    let v = '';
+    if (isSam()) { if (!S.justEq && /^[\d.]+$/.test(S.ex)) v = S.ex; }
+    else if (!fresh && force === null) v = disp;
+    v = v ? cleanNum(v) : lastTypedNumber();
+    if (!v) { buzz([30, 60, 30]); return; }
+    cfg.live = v; save(); buzz(25);
+    if (isSam()) { sReset(); sRender(); } else { reset(); render(); }   // clear without logging the magician's own number
+  }
+  function cancelTrick() {
+    if (isSam()) {
+      if (S.armed || S.force !== null) { S.armed = false; S.force = null; S.reveal = null; S.forceShown = false; buzz(25); sRender(); }
+      return;
+    }
+    if (armed || force !== null) {
+      armed = false; force = null; reveal = null; buzz(25); render();
+    } else press('bs');
+  }
+  function addGestures(el) {
+    let sx = 0, sy = 0, hold = null, moved = false;
+    el.addEventListener('pointerdown', e => {
+      sx = e.clientX; sy = e.clientY; moved = false;
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      hold = setTimeout(() => { hold = null; if (!moved) openSheet(); }, 1000);
+    });
+    el.addEventListener('pointermove', e => {
+      if (Math.hypot(e.clientX - sx, e.clientY - sy) > 12) { moved = true; clearTimeout(hold); }
+    });
+    const end = e => {
+      clearTimeout(hold);
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (e.type !== 'pointerup' || !moved) return;
+      if (Math.abs(dy) > 50 && Math.abs(dy) > Math.abs(dx)) dy > 0 ? showPeek() : liveReveal();
+      else if (Math.abs(dx) > 50) cancelTrick();
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  addGestures(dispEl); addGestures($('sdisplay'));
 
+  // ---- settings screen ----
   let previewTimer = null;
   function updatePreview() {
-    $('preview').textContent = targetString();
-    if (cfg.custom) { $('previewNote').textContent = 'Your own number. Clear the box to go back to the date.'; return; }
-    $('previewNote').textContent = 'Format ' + cfg.fmt.replace(/mm/, 'MM') + (cfg.offset ? ', ' + cfg.offset + ' min ahead' : '') + '.';
+    $('preview').textContent = nextReveal();
+    const items = listItems();
+    let note;
+    if (cfg.live) note = 'Live reveal, set by swiping up. Used for the next trick only.';
+    else if (items.length) note = 'Number ' + (cfg.idx % items.length + 1) + ' of ' + items.length + ' from your list' + (cfg.once ? ', each used once.' : '.');
+    else note = 'Date and time, format ' + cfg.fmt.replace(/mm/, 'MM') + (cfg.offset ? ', ' + cfg.offset + ' min ahead' : '') + '.';
+    $('previewNote').textContent = note;
+    $('liveRow').hidden = !cfg.live; $('liveVal').textContent = cfg.live;
+  }
+  function renderLog() {
+    const ul = $('peekLog'); ul.textContent = '';
+    if (!cfg.log.length) { const li = document.createElement('li'); li.textContent = 'Nothing typed yet.'; li.style.listStyle = 'none'; ul.appendChild(li); return; }
+    cfg.log.slice().reverse().forEach(x => {
+      const li = document.createElement('li');
+      li.textContent = x.v + '  ';
+      const s = document.createElement('span');
+      s.textContent = new Date(x.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      li.appendChild(s); ul.appendChild(li);
+    });
   }
   function openSheet() {
     $('fmt').value = cfg.fmt; $('offset').value = String(cfg.offset);
-    $('h12').checked = cfg.h12; $('dot').checked = cfg.dot; $('arm').value = cfg.arm; $('custom').value = cfg.custom;
-    updatePreview(); previewTimer = setInterval(updatePreview, 1000);
+    $('h12').checked = cfg.h12; $('dot').checked = cfg.dot; $('arm').value = cfg.arm;
+    $('list').value = cfg.list; $('once').checked = cfg.once; $('style').value = cfg.style;
+    updatePreview(); renderLog(); previewTimer = setInterval(updatePreview, 1000);
     $('sheet').hidden = false;
   }
   function readSheet() {
     cfg.fmt = $('fmt').value; cfg.offset = Number($('offset').value);
-    cfg.h12 = $('h12').checked; cfg.dot = $('dot').checked; cfg.arm = $('arm').value; save(); updatePreview();
+    cfg.h12 = $('h12').checked; cfg.dot = $('dot').checked; cfg.arm = $('arm').value; cfg.once = $('once').checked;
+    save(); updatePreview();
   }
-  $('custom').addEventListener('input', e => {
-    const v = e.target.value.replace(/\D/g, '').slice(0, 12);
-    e.target.value = v; cfg.custom = v; save(); updatePreview();
+  ['fmt', 'offset', 'h12', 'dot', 'arm', 'once'].forEach(id => $(id).addEventListener('change', readSheet));
+  $('style').addEventListener('change', () => { cfg.style = $('style').value; save(); applyStyle(); });
+  $('list').addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/[^\d.,\s]/g, '');
+    cfg.list = e.target.value; cfg.idx = 0; save(); updatePreview();
   });
-  ['fmt', 'offset', 'h12', 'dot', 'arm'].forEach(id => $(id).addEventListener('change', readSheet));
-  $('close').addEventListener('click', () => { clearInterval(previewTimer); $('sheet').hidden = true; render(); });
+  $('liveClear').addEventListener('click', () => { cfg.live = ''; save(); updatePreview(); });
+  $('peekClear').addEventListener('click', () => { cfg.log = []; save(); renderLog(); });
 
-  window.addEventListener('resize', render);
+  // Upside-down calculator spelling: the number, read with the phone turned over, spells the word.
+  const FLIP = { O: '0', I: '1', Z: '2', E: '3', H: '4', S: '5', G: '6', L: '7', B: '8' };
+  let wordValue = '';
+  $('word').addEventListener('input', e => {
+    const w = e.target.value.toUpperCase().replace(/\s/g, '');
+    e.target.value = w;
+    const bad = [...new Set(w.split('').filter(c => !FLIP[c]))];
+    wordValue = '';
+    if (!w) $('wordNum').textContent = 'Type a word to see its number.';
+    else if (bad.length) $('wordNum').textContent = 'Can’t use: ' + bad.join(' ');
+    else if (w.length > 12) $('wordNum').textContent = 'Too long. Use 12 letters or fewer.';
+    else { wordValue = w.split('').reverse().map(c => FLIP[c]).join(''); $('wordNum').textContent = w + ' = ' + wordValue; }
+    $('wordAdd').disabled = !wordValue;
+  });
+  $('wordAdd').addEventListener('click', () => {
+    if (!wordValue) return;
+    cfg.list = listItems().concat(wordValue).join(', ');
+    $('list').value = cfg.list; save(); updatePreview();
+  });
+
+  $('close').addEventListener('click', () => { clearInterval(previewTimer); $('sheet').hidden = true; render(); sRender(); });
+
+  window.addEventListener('resize', () => { render(); sRender(); });
   try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
-  render();
+  applyStyle();
 })();
 </script>
 
