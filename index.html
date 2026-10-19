@@ -260,10 +260,10 @@ body {
     </div>
 
     <div>
-      <h2>Secret gestures on the number display</h2>
+      <h2>Secret gestures</h2>
       <ul>
         <li><b>Hold 1 second:</b> open this screen.</li>
-        <li><b>Swipe down:</b> peek. The last numbers typed appear faintly at the top for 3 seconds.</li>
+        <li><b>Hold the = key:</b> peek. The last numbers typed appear faintly at the top for 3 seconds. A normal tap on = still works as =.</li>
         <li><b>Swipe up:</b> live reveal. If a number is on the display, it becomes the reveal for the next trick and the calculator clears. If the display is clear, the last number a spectator typed is used instead.</li>
         <li><b>Swipe left or right:</b> cancel the trick. The calculator then works normally, and the sum still adds up. On the iPhone style, when the trick isn't armed, this deletes the last digit like a real iPhone.</li>
       </ul>
@@ -689,7 +689,7 @@ body {
       clearTimeout(hold);
       const dx = e.clientX - sx, dy = e.clientY - sy;
       if (e.type !== 'pointerup' || !moved) return;
-      if (Math.abs(dy) > 50 && Math.abs(dy) > Math.abs(dx)) dy > 0 ? showPeek() : liveReveal();
+      if (Math.abs(dy) > 50 && Math.abs(dy) > Math.abs(dx)) { if (dy < 0) liveReveal(); }
       else if (Math.abs(dx) > 50) cancelTrick();
     };
     el.addEventListener('pointerup', end);
@@ -697,6 +697,15 @@ body {
     el.addEventListener('contextmenu', e => e.preventDefault());
   }
   addGestures(dispEl); addGestures($('sdisplay'));
+
+  // ---- peek: hold the = key; a normal tap still works as = ----
+  document.querySelectorAll('button[data-k="="]').forEach(b => {
+    let t = null, fired = false;
+    b.addEventListener('pointerdown', () => { fired = false; t = setTimeout(() => { fired = true; showPeek(); }, 700); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(t)));
+    b.addEventListener('click', e => { if (fired) { fired = false; e.stopPropagation(); } }, true);
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  });
 
   // ---- settings screen ----
   let previewTimer = null;
