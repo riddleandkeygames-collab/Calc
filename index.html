@@ -193,7 +193,7 @@ body {
   }
 
   // ---- calculator state ----
-  let disp = '0', acc = null, op = null, fresh = true, lastWasCalc = false;
+  let disp = '0', expr = [], op = null, fresh = true, lastWasCalc = false;
   let armed = false, force = null, forceIdx = 0, reveal = null;
 
   const num = s => parseFloat(s);
@@ -206,6 +206,18 @@ body {
   function calc(a, o, b) {
     switch (o) { case '+': return a + b; case '−': return a - b; case '×': return a * b; case '÷': return a / b; }
     return b;
+  }
+  // Evaluate [n, op, n, op, n...] with × and ÷ before + and −, like a phone calculator.
+  function evaluate(list) {
+    const terms = [list[0]];
+    for (let i = 1; i < list.length; i += 2) {
+      const o = list[i], n = list[i + 1];
+      if (o === '×' || o === '÷') terms[terms.length - 1] = calc(terms[terms.length - 1], o, n);
+      else terms.push(o, n);
+    }
+    let r = terms[0];
+    for (let i = 1; i < terms.length; i += 2) r = calc(r, terms[i], terms[i + 1]);
+    return r;
   }
 
   function render() {
@@ -222,7 +234,7 @@ body {
   }
 
   function reset() {
-    disp = '0'; acc = null; op = null; fresh = true; lastWasCalc = false;
+    disp = '0'; expr = []; op = null; fresh = true; lastWasCalc = false;
     armed = false; force = null; forceIdx = 0; reveal = null;
   }
 
@@ -233,7 +245,7 @@ body {
     const N = Number(reveal);
     if (!o) o = v < N ? '+' : '−';
     const f = o === '+' ? N - v : v - N;
-    if (f > 0) { force = fmtNum(f); forceIdx = 0; acc = v; op = o; fresh = true; return true; }
+    if (f > 0) { force = fmtNum(f); forceIdx = 0; expr = [v, o]; op = o; fresh = true; return true; }
     armed = false; reveal = null;
     return false;
   }
@@ -257,8 +269,13 @@ body {
     const v = num(disp);
     if (armed && (o === '+' || o === '−') && startForce(o)) return;
     armed = false;
-    if (op && !fresh) { acc = calc(acc, op, v); disp = fmtNum(acc); }
-    else acc = v;
+    if (op && fresh) expr[expr.length - 1] = o;   // changed their mind about the operator
+    else if (op) expr.push(v, o);
+    else expr = [v, o];
+    const done = expr.slice(0, -1);
+    let from = 0;                                  // for × and ÷, show only the running product
+    if (o === '×' || o === '÷') for (let i = 1; i < done.length; i += 2) if (done[i] === '+' || done[i] === '−') from = i + 1;
+    disp = fmtNum(evaluate(done.slice(from)));
     op = o; fresh = true;
   }
 
@@ -268,8 +285,8 @@ body {
       reset(); disp = shown; return;
     }
     if (op) {
-      const r = calc(acc, op, num(disp));
-      disp = fmtNum(r); acc = null; op = null; fresh = true; lastWasCalc = true;
+      const r = evaluate(expr.concat(num(disp)));
+      disp = fmtNum(r); expr = []; op = null; fresh = true; lastWasCalc = true;
       if (cfg.arm === 'one') armed = true;
       return;
     }
