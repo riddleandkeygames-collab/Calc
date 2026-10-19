@@ -161,6 +161,11 @@ body {
 
     <div>
       <h2>Other</h2>
+      <div class="srow"><label for="cfgSize">Flap size<br><small>Large flaps are easier to tap but fit fewer letters, so long names are shortened.</small></label>
+        <select id="cfgSize">
+          <option value="large">Large</option>
+          <option value="standard">Standard</option>
+        </select></div>
       <div class="srow"><label for="cfgTaps">Tap letters on the board to set the destination</label><input type="checkbox" id="cfgTaps"></div>
       <div class="srow"><label for="cfgPeek">Confirm the match<br><small>The word “Departures” above the station name briefly changes to the place it found.</small></label><input type="checkbox" id="cfgPeek"></div>
       <div class="srow"><label for="cfgDot">Faint dot by the clock when a reveal is waiting</label><input type="checkbox" id="cfgDot"></div>
@@ -210,7 +215,7 @@ body {
       </ol>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 2</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 3</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -222,7 +227,7 @@ body {
   const TOWNS = ['Aberdeen','Aberystwyth','Alnmouth','Ashford','Aviemore','Ayr','Banbury','Bangor','Barrow','Bath Spa','Bedford','Berwick','Birmingham','Blackpool','Bolton','Bournemouth','Bradford','Brighton','Bristol','Buxton','Cambridge','Canterbury','Cardiff','Carlisle','Carmarthen','Chester','Chesterfield','Colchester','Coventry','Crewe','Darlington','Derby','Doncaster','Dover','Dundee','Durham','Edinburgh','Ely','Exeter','Falmouth','Fort William','Glasgow','Gloucester','Grimsby','Guildford','Harrogate','Hastings','Hereford','Holyhead','Huddersfield','Hull','Inverness','Ipswich','Kendal','Kettering','Lancaster','Leeds','Leicester','Lincoln','Liverpool','Llandudno','London Euston','Lowestoft','Manchester','Middlesbrough','Milton Keynes','Morecambe','Newcastle','Newport','Northampton','Norwich','Nottingham','Oban','Oxford','Paignton','Penzance','Perth','Peterborough','Plymouth','Portsmouth','Preston','Reading','Rugby','Salisbury','Scarborough','Sheffield','Shrewsbury','Skegness','Skipton','Southampton','Southport','Stafford','Stirling','Stockport','Stoke','Sunderland','Swansea','Swindon','Taunton','Tenby','Torquay','Truro','Wakefield','Warrington','Weymouth','Whitby','Wigan','Windermere','Wolverhampton','Worcester','York'];
 
   // ---- settings ----
-  const DEF = { station: 'Manchester Piccadilly', delay: 10, name: '', flap: true, announce: true, dot: false, taps: true, peek: true };
+  const DEF = { station: 'Manchester Piccadilly', delay: 10, name: '', flap: true, announce: true, dot: false, taps: true, peek: true, size: 'large' };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('departures-cfg') || '{}')); } catch (e) {}
   const save = () => { try { localStorage.setItem('departures-cfg', JSON.stringify(cfg)); } catch (e) {} };
@@ -287,17 +292,24 @@ body {
   let cols = 24, nRows = 6, destW = 15, hasStatus = false, spec = [], cells = [];
   function layout() {
     const board = $('board');
-    const W = board.clientWidth - 16;
-    cols = Math.max(20, Math.min(46, Math.floor(W / (W < 500 ? 14 : 17))));
+    const W = board.clientWidth - 16, H = board.clientHeight - 20 - 16;
+    const large = cfg.size !== 'standard';
+    const colsFor = w => Math.max(19, Math.min(46, Math.floor((W + 2) / (w + 2))));   // 19 keeps 10 letters for the destination
+    cols = colsFor(large ? 30 : W < 500 ? 14 : 17);
+    let cw = (W - (cols - 1) * 2) / cols, ch;
+    nRows = Math.max(3, Math.min(16, Math.floor((H + 6) / (Math.round(cw * 1.45) + 6))));
+    if (large && nRows < 7) {
+      // Big flaps need at least 7 rows so every letter can be on the board; squash them nearer square to fit.
+      nRows = 7; ch = Math.floor((H + 6) / 7 - 6);
+      if (ch < cw * 0.95) { cols = colsFor(ch / 0.95); cw = (W - (cols - 1) * 2) / cols; }
+    } else {
+      // Stretch the flaps a little so the rows fill a tall (portrait) screen.
+      ch = Math.round(Math.min(cw * 2.6, (H + 6) / nRows - 6));
+    }
     hasStatus = cols >= 34;
     destW = cols - 5 - 1 - 1 - 2 - (hasStatus ? 9 : 0);
     spec = [['time', 5, true], ['', 1], ['dest', destW], ['', 1], ['plat', 2]];
     if (hasStatus) spec.push(['', 1], ['status', 8, true]);
-    const cw = (W - (cols - 1) * 2) / cols;
-    const H = board.clientHeight - 20 - 16;
-    nRows = Math.max(3, Math.min(16, Math.floor((H + 6) / (Math.round(cw * 1.45) + 6))));
-    // Stretch the flaps a little so the rows fill a tall (portrait) screen.
-    const ch = Math.round(Math.min(cw * 2.6, (H + 6) / nRows - 6));
     const tpl = 'repeat(' + cols + ', 1fr)';
     const labels = $('labels'); labels.style.gridTemplateColumns = tpl; labels.textContent = '';
     let col = 1;
@@ -560,7 +572,7 @@ body {
   function openSheet() {
     $('cfgStation').value = cfg.station; $('cfgDelay').value = String(cfg.delay); $('cfgName').value = cfg.name;
     $('cfgFlap').checked = cfg.flap; $('cfgAnnounce').checked = cfg.announce; $('cfgDot').checked = cfg.dot;
-    $('cfgTaps').checked = cfg.taps; $('cfgPeek').checked = cfg.peek;
+    $('cfgTaps').checked = cfg.taps; $('cfgPeek').checked = cfg.peek; $('cfgSize').value = cfg.size;
     $('armStatus').textContent = armText();
     $('sheet').hidden = false;
   }
@@ -568,9 +580,10 @@ body {
     cfg.station = $('cfgStation').value.trim() || DEF.station; cfg.delay = Number($('cfgDelay').value);
     cfg.name = $('cfgName').value.trim(); cfg.flap = $('cfgFlap').checked; cfg.announce = $('cfgAnnounce').checked; cfg.dot = $('cfgDot').checked;
     cfg.taps = $('cfgTaps').checked; cfg.peek = $('cfgPeek').checked;
+    if (cfg.size !== $('cfgSize').value) { cfg.size = $('cfgSize').value; relayout(); }
     save(); $('stname').textContent = cfg.station;
   }
-  ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot', 'cfgTaps', 'cfgPeek'].forEach(id => $(id).addEventListener('change', readSheet));
+  ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot', 'cfgTaps', 'cfgPeek', 'cfgSize'].forEach(id => $(id).addEventListener('change', readSheet));
   $('testSound').addEventListener('click', () => { audio(); announce({ t: addMin(new Date(), 3), dest: 'Whitby', plat: '7', calling: ['York', 'Malton', 'Whitby'], name: cfg.name }); });
   $('resetBtn').addEventListener('click', () => { arm(null); rows = freshRows(nRows); show(false); $('armStatus').textContent = armText(); buzz(25); });
   $('close').addEventListener('click', () => { readSheet(); $('sheet').hidden = true; if (armed) arm(armed); });
@@ -579,7 +592,8 @@ body {
   $('stname').textContent = cfg.station;
   layout(); rows = freshRows(nRows); show(true); tick();
   let rt = null;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { layout(); if (!(rows[0] && rows[0].forced)) rows = freshRows(nRows); show(true); stripMsg = ''; setStrip(); }, 150); });
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(relayout, 150); });
+  function relayout() { layout(); if (!(rows[0] && rows[0].forced)) rows = freshRows(nRows); show(true); stripMsg = ''; setStrip(); }
   // Keep the screen on while the board sits on the table.
   function wake() { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {} }
   wake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
