@@ -190,7 +190,7 @@ body {
       <h2>Secret controls</h2>
       <ul>
         <li><b>Tap rows (board by destination):</b> each row is a different first letter. Tap the row for each of the first three letters of their destination. See “Tapping rows” below.</li>
-        <li><b>Tap letters (board by time):</b> tap the first three letters of their destination, wherever you can see them on the board, then stop. After a second's pause the app finds the place, and “Departures” changes to its name for 2 seconds so you know it worked. Tap a number in the time or platform column, before or after the letters, to choose the platform.</li>
+        <li><b>Tap letters (board by time):</b> tap the first three letters of their destination, wherever you can see them on the board. After each tap, “Departures” changes for 2 seconds to the place it matches so far. Tap a number in the time or platform column, before or after the letters, to choose the platform.</li>
         <li><b>Hold the station name (1 second):</b> opens what looks like a station search. Type the spectator's destination and press Go. The board doesn't change yet.</li>
         <li><b>Double-tap the clock:</b> reveal now.</li>
         <li><b>Double-tap the station name:</b> reset the board, ready for the next performance. After a reveal you must reset before tapping rows again.</li>
@@ -216,7 +216,9 @@ body {
         <li>A tap anywhere on a row counts as the <b>first letter of that row's station</b>, whatever part of the row you touch. You don't tap letters inside a name. For York, find the station starting with Y and tap it, then the station starting with O, then the one starting with R: “You could have gone here, or here, or here…”</li>
         <li>Scroll the board to reach rows further down. A scroll never counts as a tap.</li>
         <li>No station starts with X. For a letter that has no row, tap the column headings (Time, Destination, Plat) instead. It counts as “any letter”: E, headings, E finds Exeter.</li>
-        <li>Pause for a second when you're done. “Departures” changes to the place it found for 2 seconds. If nothing matches, it shows the letters it received instead, so you can see what went wrong.</li>
+        <li>Take as long as you like between taps, and scroll as much as you need. After every tap, “Departures” shows the place it matches so far, for 2 seconds. Keep tapping until it shows the right one. If nothing matches, it shows the letters it received instead.</li>
+        <li>The letters are forgotten 20 seconds after your last tap, at the reveal, and when you double-tap the station name. Made a mistake? Double-tap the station name and start again.</li>
+        <li>The reveal delay counts from your last tap.</li>
         <li>At the reveal the board scrolls to the top and rattles round into a normal departures board, with their train first.</li>
         <li>After the reveal the board stays in time order. Double-tap the station name to bring back the board by destination.</li>
       </ul>
@@ -244,7 +246,7 @@ body {
       </ol>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 5</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 6</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -536,7 +538,7 @@ body {
   function reveal() {
     clearTimeout(revealTimer);
     if (!armed) { buzz([30, 60, 30]); return; }
-    const a = armed; armed = null; $('armdot').hidden = true;
+    const a = armed; armed = null; $('armdot').hidden = true; clearTaps();
     const now = new Date();
     let t;
     if (a.time) { t = new Date(now); t.setHours(a.time.h, a.time.m, 0, 0); }
@@ -589,13 +591,16 @@ body {
     $('eyebrow').textContent = text;
     clearTimeout(peekTimer); peekTimer = setTimeout(eyebrowText, 2000);
   }
+  // Match after every tap, so there's no need to hurry between taps or to pause at the end.
+  // The letters are forgotten after 20 seconds without a tap, at the reveal, or on a reset.
+  function clearTaps() { tapLetters = ''; tapDigits = ''; clearTimeout(tapTimer); }
   function resolveTaps() {
+    clearTimeout(tapTimer); tapTimer = setTimeout(clearTaps, 20000);
     const letters = tapLetters, digits = tapDigits.slice(0, 2);
-    tapLetters = ''; tapDigits = '';
     if (letters.replace(/\?/g, '')) {
       const re = new RegExp('^' + letters.replace(/\?/g, '.'));   // ? is “any letter”
       const dest = PLACES.find(p => re.test(keyOf(p)));
-      if (!dest) { buzz([30, 60, 30]); peek(letters.replace(/\?/g, '·') + ' – not found'); return; }
+      if (!dest) { arm(null); buzz([30, 60, 30]); peek(letters.replace(/\?/g, '·') + ' – not found'); return; }
       arm({ dest, plat: digits ? String(+digits) : '', time: null, name: cfg.name });
       buzz(25); peek(dest + (digits ? ' · ' + (+digits) : ''));
     } else if (digits && armed) {
@@ -615,19 +620,19 @@ body {
     if (view === 'az' && cfg.input === 'rows') {
       const row = e.target.closest('.row'), head = e.target.closest('.labels');
       if (!row && !head) return;
-      lastBoardTap = Date.now(); clearTimeout(tapTimer);
+      lastBoardTap = Date.now();
       tapLetters += head ? '?' : keyOf(azRows[+row.dataset.r].dest)[0];
-      tapTimer = setTimeout(resolveTaps, 1200);
+      resolveTaps();
       return;
     }
     const el = e.target.closest('.cell');
     if (cfg.input !== 'letters' || !el) return;
     const c = cells[+el.dataset.r][+el.dataset.c];
-    lastBoardTap = Date.now(); clearTimeout(tapTimer);
+    lastBoardTap = Date.now();
     if (/[A-Z]/.test(c.cur) && c.kind !== 'time') tapLetters += c.cur;
     else if (/\d/.test(c.cur) && (c.kind === 'time' || c.kind === 'plat')) tapDigits += c.cur;
-    else { tapLetters = ''; tapDigits = ''; return; }   // a blank flap starts again
-    tapTimer = setTimeout(resolveTaps, 1200);
+    else { clearTaps(); peek('Cleared'); return; }   // a blank flap starts again
+    resolveTaps();
   });
 
   // ---- gestures ----
@@ -675,7 +680,7 @@ body {
   }
   ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot', 'cfgInput', 'cfgOrder', 'cfgPeek', 'cfgSize'].forEach(id => $(id).addEventListener('change', readSheet));
   $('testSound').addEventListener('click', () => { audio(); announce({ t: addMin(new Date(), 3), dest: 'Whitby', plat: '7', calling: ['York', 'Malton', 'Whitby'], name: cfg.name }); });
-  function resetBoard() { arm(null); view = startView(); rows = []; azRows = freshAz(); relayout(); buzz(25); }
+  function resetBoard() { clearTaps(); arm(null); view = startView(); rows = []; azRows = freshAz(); relayout(); buzz(25); }
   $('resetBtn').addEventListener('click', () => { resetBoard(); $('armStatus').textContent = armText(); });
   $('close').addEventListener('click', () => { readSheet(); $('sheet').hidden = true; if (armed) arm(armed); });
 
