@@ -73,7 +73,7 @@ body {
 .hint.minus { right: 8px; }
 .peek {
   position: absolute; top: calc(8px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
-  font: 13px/1.4 var(--font); color: var(--dim); opacity: .7; z-index: 3; pointer-events: none;
+  font: 17px/1.4 var(--font); color: var(--dim); z-index: 3; pointer-events: none;
   font-variant-numeric: tabular-nums;
 }
 .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
@@ -263,7 +263,7 @@ body {
       <h2>Secret gestures</h2>
       <ul>
         <li><b>Hold 1 second:</b> open this screen.</li>
-        <li><b>Hold the = key:</b> peek. The last numbers typed appear faintly at the top for 3 seconds. A normal tap on = still works as =.</li>
+        <li><b>Hold the = key for half a second:</b> peek. The last numbers typed appear faintly at the top for 3 seconds. A normal tap on = still works as =.</li>
         <li><b>Swipe up:</b> live reveal. If a number is on the display, it becomes the reveal for the next trick and the calculator clears. If the display is clear, the last number a spectator typed is used instead.</li>
         <li><b>Swipe left or right:</b> cancel the trick. The calculator then works normally, and the sum still adds up. On the iPhone style, when the trick isn't armed, this deletes the last digit like a real iPhone.</li>
       </ul>
@@ -280,6 +280,7 @@ body {
       </ol>
       <p style="margin-top:8px">The secret number is worked out when they press + or −. If the minute might change before the reveal, use "Add minutes". AC or C cancels the trick.</p>
     </div>
+    <p style="font-size:13px">Version 5</p>
     <button class="done" id="close">Done</button>
   </div>
 </div>
@@ -701,8 +702,8 @@ body {
   // ---- peek: hold the = key; a normal tap still works as = ----
   document.querySelectorAll('button[data-k="="]').forEach(b => {
     let t = null, fired = false;
-    b.addEventListener('pointerdown', () => { fired = false; t = setTimeout(() => { fired = true; showPeek(); }, 700); });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(t)));
+    b.addEventListener('pointerdown', () => { fired = false; clearTimeout(t); t = setTimeout(() => { fired = true; showPeek(); }, 450); });
+    b.addEventListener('pointerup', () => clearTimeout(t));   // Android may send pointercancel during a hold, so ignore it
     b.addEventListener('click', e => { if (fired) { fired = false; e.stopPropagation(); } }, true);
     b.addEventListener('contextmenu', e => e.preventDefault());
   });
