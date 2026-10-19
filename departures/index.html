@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Departures</title>
+<meta name="theme-color" content="#0e0f12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Departures">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; height: 100%; }
+body { margin: 0; overscroll-behavior: none; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: one-screen station board. Header (station + clock), split-flap rows, scrolling "calling at" strip. Deliberately single dark look. */
+:root {
+  --bg: #0e0f12;
+  --housing: #16181c;
+  --flap: #23262c;
+  --flap-lo: #1d2025;
+  --seam: #0b0c0e;
+  --ink: #f1ede3;
+  --amber: #f5c518;
+  --dim: #8c8f97;
+  --panel: #1a1c20;
+  --line: #2e3138;
+  --flapfont: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
+  --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--ui);
+  overflow: hidden; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.app {
+  height: 100%; display: flex; flex-direction: column; box-sizing: border-box;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-block: 10px;
+  gap: 10px;
+}
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.station { min-width: 0; }
+.eyebrow { font: 600 12px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.stname { font: 700 26px/1.1 var(--flapfont); letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 4px; }
+.clock { font: 600 30px/1 var(--flapfont); color: var(--amber); font-variant-numeric: tabular-nums; letter-spacing: .04em; padding: 6px 2px 2px 10px; position: relative; }
+.armdot { position: absolute; right: 0; top: 0; width: 4px; height: 4px; border-radius: 50%; background: var(--dim); opacity: .55; }
+.board { flex: 1; min-height: 0; background: var(--housing); border-radius: 6px; padding: 10px 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.labels, .row { display: grid; gap: 2px; }
+.labels span.end { justify-self: end; overflow: visible; }
+.labels span { font: 600 11px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); padding-bottom: 2px; white-space: nowrap; overflow: hidden; }
+.cell {
+  position: relative; background: linear-gradient(var(--flap) 0 50%, var(--flap-lo) 50% 100%);
+  border-radius: 2px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  font-family: var(--flapfont); font-weight: 600; color: var(--ink); line-height: 1;
+}
+.cell::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--seam); }
+.cell.gap { background: transparent; }
+.cell.gap::after { display: none; }
+.cell.amber { color: var(--amber); }
+.cell span { display: block; transform-origin: 50% 50%; }
+.strip { background: var(--housing); border-radius: 6px; overflow: hidden; height: 34px; position: relative; flex: none; }
+.strip-text { position: absolute; top: 0; left: 0; white-space: nowrap; font: 600 20px/34px var(--flapfont); color: var(--amber); letter-spacing: .04em; text-transform: uppercase; will-change: transform; }
+
+/* Hidden station picker: the secret input, dressed as an ordinary station search. */
+.picker { position: fixed; inset: 0; background: var(--bg); z-index: 20; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
+.picker-bar { display: flex; gap: 10px; align-items: center; padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); }
+.picker input { flex: 1; min-width: 0; font: 400 18px/1.2 var(--ui); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; outline: none; }
+.picker input:focus { border-color: var(--dim); }
+.txtbtn { background: none; border: 0; color: var(--amber); font: 500 17px var(--ui); padding: 8px 4px; cursor: pointer; }
+.picker ul { list-style: none; margin: 0; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); overflow-y: auto; }
+.picker li { padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 17px; }
+
+/* Magician settings */
+.sheet { position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: calc(env(safe-area-inset-top, 0px) + 20px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 28px) max(16px, env(safe-area-inset-left, 0px));
+  user-select: text; -webkit-user-select: text; }
+.sheet-inner { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; font-size: 16px; line-height: 1.45; }
+.sheet h1 { font: 700 30px/1.1 var(--flapfont); text-transform: uppercase; letter-spacing: .03em; margin: 0; }
+.sheet h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 0 0 6px; font-weight: 600; }
+.sheet p { margin: 0; color: var(--dim); }
+.sheet ol, .sheet ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.sheet code { font: 600 15px var(--ui); color: var(--amber); }
+.srow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.srow label { flex: 1 1 180px; min-width: 0; }
+.srow small { color: var(--dim); }
+.srow input[type=text], .srow select { font: 16px var(--ui); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-width: 100%; }
+.srow input[type=text] { flex: 1 1 220px; min-width: 0; }
+.srow input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--amber); }
+.btn { font: 600 15px var(--ui); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+.btn.primary { background: var(--amber); color: #111; border-color: var(--amber); font-size: 17px; padding: 13px; }
+.status { font-size: 15px; color: var(--ink); background: var(--panel); border-radius: 8px; padding: 10px 12px; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+</style>
+
+<div class="app" id="app">
+  <div class="top">
+    <div class="station" id="stationZone">
+      <div class="eyebrow">Departures</div>
+      <div class="stname" id="stname">Manchester Piccadilly</div>
+    </div>
+    <div class="clock" id="clock">00:00:00<span class="armdot" id="armdot" hidden></span></div>
+  </div>
+  <div class="board" id="board">
+    <div class="labels" id="labels"></div>
+  </div>
+  <div class="strip" id="strip"><div class="strip-text" id="stripText"></div></div>
+</div>
+
+<div class="picker" id="picker" hidden>
+  <div class="picker-bar">
+    <input id="pick" type="text" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" placeholder="Search stations" enterkeyhint="go">
+    <button class="txtbtn" id="pickCancel">Cancel</button>
+  </div>
+  <ul id="pickList"></ul>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-inner">
+    <h1>Magician settings</h1>
+
+    <div>
+      <h2>Next reveal</h2>
+      <div class="status" id="armStatus">Not set.</div>
+    </div>
+
+    <div>
+      <h2>Board</h2>
+      <div class="srow"><label for="cfgStation">Station shown at the top</label>
+        <input id="cfgStation" type="text" autocomplete="off"></div>
+      <div class="srow"><label for="cfgDelay">Reveal happens<br><small>After you set it with the secret search.</small></label>
+        <select id="cfgDelay">
+          <option value="0">Only when I double-tap the clock</option>
+          <option value="5">5 seconds later</option>
+          <option value="10">10 seconds later</option>
+          <option value="20">20 seconds later</option>
+          <option value="30">30 seconds later</option>
+          <option value="60">1 minute later</option>
+        </select></div>
+      <div class="srow"><label for="cfgName">Seat reservation name<br><small>Optional. Scrolls along the bottom after the reveal, e.g. SARAH. You can also add it in the secret search after a slash.</small></label>
+        <input id="cfgName" type="text" autocomplete="off" autocapitalize="characters"></div>
+    </div>
+
+    <div>
+      <h2>Sound</h2>
+      <div class="srow"><label for="cfgFlap">Flap rattle when the board changes</label><input type="checkbox" id="cfgFlap"></div>
+      <div class="srow"><label for="cfgAnnounce">Station announcement at the reveal<br><small>Chime, then a spoken announcement. Voice quality depends on the phone.</small></label><input type="checkbox" id="cfgAnnounce"></div>
+      <div class="srow"><label>Test the sound</label><button class="btn" id="testSound">Play announcement</button></div>
+    </div>
+
+    <div>
+      <h2>Other</h2>
+      <div class="srow"><label for="cfgDot">Faint dot by the clock when a reveal is waiting</label><input type="checkbox" id="cfgDot"></div>
+      <div class="srow"><label>Start a fresh board and clear the reveal</label><button class="btn" id="resetBtn">Reset board</button></div>
+    </div>
+
+    <div>
+      <h2>Secret controls</h2>
+      <ul>
+        <li><b>Hold the station name (1 second):</b> opens what looks like a station search. Type the spectator's destination and press Go. The board doesn't change yet.</li>
+        <li><b>Double-tap the clock:</b> reveal now.</li>
+        <li><b>Hold the clock (1 second):</b> open this screen.</li>
+      </ul>
+    </div>
+
+    <div>
+      <h2>What to type in the search</h2>
+      <ul>
+        <li><code>whitby</code> &nbsp;destination only. Platform and time are made up.</li>
+        <li><code>whitby 7</code> &nbsp;platform 7.</li>
+        <li><code>whitby 7 1947</code> &nbsp;platform 7, leaves at 19:47.</li>
+        <li><code>whitby 7 1947 / sarah</code> &nbsp;adds “Seat reserved for SARAH” to the scrolling strip.</li>
+      </ul>
+      <p style="margin-top:8px">Any place name works, not only ones in the list. Two-digit numbers are the platform, three or four digits are the time.</p>
+    </div>
+
+    <div>
+      <h2>How to perform</h2>
+      <ol>
+        <li>Prop the phone on the table, board facing everyone. Landscape looks best. Let it run: trains leave and new ones appear on their own.</li>
+        <li>Ask for any place in the country, a number for the platform, and a time. Get the information however suits you: they tell you, or you peek a written answer.</li>
+        <li>Pick up the phone “to check the trains”, hold the station name and type the details into the search. Put the phone back face up.</li>
+        <li>After your chosen delay, the next train departs, the whole board rattles round, and their train is at the top, with the announcement.</li>
+      </ol>
+    </div>
+
+    <div class="srow" style="border-bottom:0"><label>Version 1</label></div>
+    <button class="btn primary" id="close">Done</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const DRUM = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.'-&/";
+  const TOWNS = ['Aberdeen','Aberystwyth','Alnmouth','Ashford','Aviemore','Ayr','Banbury','Bangor','Barrow','Bath Spa','Bedford','Berwick','Birmingham','Blackpool','Bolton','Bournemouth','Bradford','Brighton','Bristol','Buxton','Cambridge','Canterbury','Cardiff','Carlisle','Carmarthen','Chester','Chesterfield','Colchester','Coventry','Crewe','Darlington','Derby','Doncaster','Dover','Dundee','Durham','Edinburgh','Ely','Exeter','Falmouth','Fort William','Glasgow','Gloucester','Grimsby','Guildford','Harrogate','Hastings','Hereford','Holyhead','Huddersfield','Hull','Inverness','Ipswich','Kendal','Kettering','Lancaster','Leeds','Leicester','Lincoln','Liverpool','Llandudno','London Euston','Lowestoft','Manchester','Middlesbrough','Milton Keynes','Morecambe','Newcastle','Newport','Northampton','Norwich','Nottingham','Oban','Oxford','Paignton','Penzance','Perth','Peterborough','Plymouth','Portsmouth','Preston','Reading','Rugby','Salisbury','Scarborough','Sheffield','Shrewsbury','Skegness','Skipton','Southampton','Southport','Stafford','Stirling','Stockport','Stoke','Sunderland','Swansea','Swindon','Taunton','Tenby','Torquay','Truro','Wakefield','Warrington','Weymouth','Whitby','Wigan','Windermere','Wolverhampton','Worcester','York'];
+
+  // ---- settings ----
+  const DEF = { station: 'Manchester Piccadilly', delay: 10, name: '', flap: true, announce: true, dot: false };
+  let cfg = Object.assign({}, DEF);
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem('departures-cfg') || '{}')); } catch (e) {}
+  const save = () => { try { localStorage.setItem('departures-cfg', JSON.stringify(cfg)); } catch (e) {} };
+
+  // ---- helpers ----
+  const rnd = n => Math.floor(Math.random() * n);
+  const pick = a => a[rnd(a.length)];
+  const pad2 = n => String(n).padStart(2, '0');
+  const hhmm = d => pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  const addMin = (d, m) => new Date(d.getTime() + m * 60000);
+  const norm = s => s.toUpperCase().split('').map(c => DRUM.includes(c) ? c : ' ').join('');
+  const fit = (s, n) => { s = norm(s); return s.length > n ? s.slice(0, n) : s.padEnd(n, ' '); };
+  const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+  const title = s => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
+  // ---- timetable ----
+  let rows = [];          // { t: Date, dest, plat, status, calling: [], forced }
+  let armed = null;       // { dest, plat, time, name }
+  let revealTimer = null;
+
+  function callingFor(dest) {
+    const pool = TOWNS.filter(t => t.toUpperCase() !== dest.toUpperCase());
+    const n = 3 + rnd(4), out = [];
+    while (out.length < n) { const t = pick(pool); if (!out.includes(t)) out.push(t); }
+    return out.concat(dest);
+  }
+  function statusFor(t) {
+    const r = Math.random();
+    if (r < 0.72) return 'On time';
+    if (r < 0.9) return 'Exp' + hhmm(addMin(t, 2 + rnd(9)));
+    return 'Delayed';
+  }
+  function makeRow(t, avoid) {
+    let dest; do { dest = pick(TOWNS); } while (avoid && avoid.includes(dest));
+    return { t, dest, plat: String(1 + rnd(14)), status: statusFor(t), calling: callingFor(dest), forced: false };
+  }
+  function freshRows(n) {
+    const out = []; let t = addMin(new Date(), 2 + rnd(3));
+    for (let i = 0; i < n; i++) { out.push(makeRow(t, out.map(r => r.dest))); t = addMin(t, 3 + rnd(7)); }
+    return out;
+  }
+  function topUp() {
+    while (rows.length < nRows) {
+      const last = rows[rows.length - 1];
+      rows.push(makeRow(addMin(last ? last.t : new Date(), 3 + rnd(7)), rows.map(r => r.dest)));
+    }
+    rows.length = nRows;
+  }
+
+  // ---- layout: a grid of flap cells sized to the screen ----
+  let cols = 24, nRows = 6, hasStatus = false, spec = [], cells = [];
+  function layout() {
+    const board = $('board');
+    const W = board.clientWidth - 16;
+    cols = Math.max(20, Math.min(46, Math.floor(W / (W < 500 ? 14 : 17))));
+    hasStatus = cols >= 34;
+    const destW = cols - 5 - 1 - 1 - 2 - (hasStatus ? 9 : 0);
+    spec = [['time', 5, true], ['', 1], ['dest', destW], ['', 1], ['plat', 2]];
+    if (hasStatus) spec.push(['', 1], ['status', 8, true]);
+    const cw = (W - (cols - 1) * 2) / cols;
+    const H = board.clientHeight - 20 - 16;
+    nRows = Math.max(3, Math.min(16, Math.floor((H + 6) / (Math.round(cw * 1.45) + 6))));
+    // Stretch the flaps a little so the rows fill a tall (portrait) screen.
+    const ch = Math.round(Math.min(cw * 2.6, (H + 6) / nRows - 6));
+    const tpl = 'repeat(' + cols + ', 1fr)';
+    const labels = $('labels'); labels.style.gridTemplateColumns = tpl; labels.textContent = '';
+    let col = 1;
+    spec.forEach(([k, w]) => {
+      if (k) {
+        const s = document.createElement('span');
+        s.textContent = { time: 'Time', dest: 'Destination', plat: 'Plat', status: 'Expected' }[k];
+        s.style.gridColumn = col + ' / span ' + w; if (k === 'plat') s.className = 'end'; labels.appendChild(s);
+      }
+      col += w;
+    });
+    board.querySelectorAll('.row').forEach(r => r.remove());
+    cells = [];
+    for (let r = 0; r < nRows; r++) {
+      const row = document.createElement('div'); row.className = 'row'; row.style.gridTemplateColumns = tpl;
+      const line = [];
+      spec.forEach(([k, w, amber]) => {
+        for (let i = 0; i < w; i++) {
+          const c = document.createElement('div'); c.className = 'cell' + (k ? '' : ' gap') + (amber ? ' amber' : '');
+          c.style.height = ch + 'px'; c.style.fontSize = Math.round(Math.min(ch * 0.78, cw * 1.25)) + 'px';
+          const s = document.createElement('span'); s.textContent = ' '; c.appendChild(s); row.appendChild(c);
+          line.push({ el: s, cur: ' ', tgt: ' ', gap: !k });
+        }
+      });
+      board.appendChild(row); cells.push(line);
+    }
+  }
+  function rowText(r) {
+    if (!r) return ' '.repeat(cols);
+    const v = { time: hhmm(r.t), dest: r.dest, plat: r.plat, status: r.status };
+    return spec.map(([k, w]) => k ? fit(v[k], w) : ' '.repeat(w)).join('');
+  }
+  function show(instant) {
+    topUp();
+    for (let i = 0; i < nRows; i++) {
+      const txt = rowText(rows[i]);
+      cells[i].forEach((c, j) => {
+        c.tgt = txt[j] || ' ';
+        if (instant || c.gap) { c.cur = c.tgt; c.el.textContent = c.cur; }
+      });
+    }
+    setStrip();
+  }
+
+  // ---- the flap engine: every cell steps through the drum one letter at a time ----
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function step() {
+    let moving = 0;
+    for (const line of cells) for (const c of line) {
+      if (c.cur === c.tgt) continue;
+      moving++;
+      if (reduce) { c.cur = c.tgt; c.el.textContent = c.cur; continue; }
+      c.cur = DRUM[(DRUM.indexOf(c.cur) + 1) % DRUM.length];
+      c.el.textContent = c.cur;
+      c.el.animate && c.el.animate([{ transform: 'scaleY(.35)', opacity: .6 }, { transform: 'scaleY(1)', opacity: 1 }], { duration: 55 });
+    }
+    if (moving && cfg.flap) clack(moving);
+  }
+  setInterval(step, 50);
+
+  // ---- sound ----
+  let actx = null, noise = null;
+  function audio() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+      actx = new AC();
+      noise = actx.createBuffer(1, Math.floor(actx.sampleRate * 0.012), actx.sampleRate);
+      const d = noise.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function clack(n) {
+    if (!actx || actx.state !== 'running') return;
+    const src = actx.createBufferSource(), g = actx.createGain(), f = actx.createBiquadFilter();
+    src.buffer = noise; f.type = 'bandpass'; f.frequency.value = 2200 + rnd(800);
+    g.gain.value = Math.min(0.5, 0.06 + n / 120);
+    src.connect(f); f.connect(g); g.connect(actx.destination); src.start();
+  }
+  function chime() {
+    const a = audio(); if (!a) return 0;
+    [659.3, 523.3, 784].forEach((hz, i) => {
+      const o = a.createOscillator(), g = a.createGain(), t = a.currentTime + i * 0.55;
+      o.type = 'sine'; o.frequency.value = hz;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.28, t + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
+      o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 1.4);
+    });
+    return 1900;
+  }
+  function voice() {
+    const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+    return vs.find(v => /en[-_]GB/i.test(v.lang) && /female|serena|kate|martha|libby|sonia/i.test(v.name)) || vs.find(v => /en[-_]GB/i.test(v.lang)) || null;
+  }
+  function say(text) {
+    if (!window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    const v = voice(); if (v) u.voice = v; u.lang = 'en-GB'; u.rate = 0.92;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }
+  function spokenTime(d) {
+    const h = d.getHours(), m = d.getMinutes();
+    return pad2(h) + ' ' + (m === 0 ? 'hundred' : m < 10 ? 'oh ' + m : m);
+  }
+  function announce(r) {
+    const wait = chime();
+    const calling = r.calling.slice(0, -1);
+    const text = 'Platform ' + r.plat + '. The next train to depart from platform ' + r.plat + ' is the ' + spokenTime(r.t) +
+      ' service to ' + r.dest + '. Calling at ' + calling.join(', ') + ', and ' + r.dest + '.' +
+      (r.name ? ' Passenger ' + title(r.name) + ', your seat is reserved in coach C.' : '');
+    setTimeout(() => say(text), wait);
+  }
+  // Phones only allow sound after a touch, so unlock audio and speech on the first one.
+  let unlocked = false;
+  document.addEventListener('pointerdown', () => {
+    audio();
+    if (!unlocked && window.speechSynthesis) { unlocked = true; const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
+  }, true);
+
+  // ---- calling-at strip ----
+  let stripAnim = null, stripMsg = '';
+  function setStrip() {
+    const r = rows[0]; if (!r) return;
+    const cs = r.calling;
+    let msg = 'The ' + hhmm(r.t) + ' to ' + r.dest + ' from platform ' + r.plat + ' is calling at ' +
+      cs.slice(0, -1).join(', ') + ' and ' + cs[cs.length - 1] + '.   This train is formed of ' + (r.forced ? 8 : 4 + rnd(2) * 4) + ' coaches.';
+    if (r.forced && r.name) msg += '   Coach C, seat 14, reserved for ' + r.name.toUpperCase() + '.';
+    if (msg === stripMsg) return;
+    stripMsg = msg;
+    const el = $('stripText'); el.textContent = msg;
+    if (stripAnim) stripAnim.cancel();
+    const W = $('strip').clientWidth, w = el.scrollWidth;
+    if (reduce) { el.style.transform = 'translateX(8px)'; return; }
+    stripAnim = el.animate([{ transform: 'translateX(' + W + 'px)' }, { transform: 'translateX(' + (-w) + 'px)' }],
+      { duration: (W + w) * 14, iterations: Infinity });
+  }
+
+  // ---- clock and natural departures ----
+  function tick() {
+    const now = new Date();
+    $('clock').firstChild.nodeValue = hhmm(now) + ':' + pad2(now.getSeconds());
+    // A train leaves 40 seconds after its time; forced trains stay until reset.
+    if (rows.length && !rows[0].forced && now - rows[0].t > 40000) { rows.shift(); show(false); }
+  }
+  setInterval(tick, 1000);
+
+  // ---- the secret search ----
+  function parseEntry(s) {
+    let name = '';
+    const slash = s.indexOf('/');
+    if (slash >= 0) { name = s.slice(slash + 1).trim(); s = s.slice(0, slash); }
+    const words = s.trim().split(/\s+/).filter(Boolean);
+    let plat = '', time = null;
+    while (words.length > 1 && /^\d{1,4}$/.test(words[words.length - 1])) {
+      const n = words.pop();
+      if (n.length >= 3) { const h = +n.slice(0, -2), m = +n.slice(-2); if (h < 24 && m < 60) time = { h, m }; }
+      else plat = String(+n);
+    }
+    const dest = title(words.join(' '));
+    return dest ? { dest, plat, time, name: name || cfg.name } : null;
+  }
+  function arm(a) {
+    armed = a; clearTimeout(revealTimer);
+    $('armdot').hidden = !(cfg.dot && armed);
+    if (armed && cfg.delay > 0) revealTimer = setTimeout(reveal, cfg.delay * 1000);
+  }
+  function reveal() {
+    clearTimeout(revealTimer);
+    if (!armed) { buzz([30, 60, 30]); return; }
+    const a = armed; armed = null; $('armdot').hidden = true;
+    const now = new Date();
+    let t;
+    if (a.time) { t = new Date(now); t.setHours(a.time.h, a.time.m, 0, 0); }
+    else t = addMin(now, 3);
+    const r = { t, dest: a.dest, plat: a.plat || String(1 + rnd(14)), status: 'On time', calling: callingFor(a.dest), forced: true, name: a.name };
+    // The current first train departs; theirs is next, and later trains follow it.
+    const rest = rows.slice(1).filter(x => x.dest.toUpperCase() !== r.dest.toUpperCase());
+    let next = addMin(t, 3 + rnd(5));
+    rest.forEach(x => { if (x.t <= t) { x.t = next; x.status = statusFor(next); } next = addMin(x.t, 3 + rnd(6)); });
+    rest.sort((p, q) => p.t - q.t);
+    rows = [r].concat(rest);
+    show(false);
+    if (cfg.announce) setTimeout(() => announce(r), 2600);
+  }
+  function renderPicks() {
+    const q = $('pick').value.split(/[\d\/]/)[0].trim().toLowerCase();
+    const ul = $('pickList'); ul.textContent = '';
+    TOWNS.filter(t => !q || t.toLowerCase().startsWith(q)).slice(0, 12).forEach(t => {
+      const li = document.createElement('li'); li.textContent = t;
+      li.addEventListener('click', () => submitPick(t + $('pick').value.replace(/^[^\d\/]*/, ' ')));
+      ul.appendChild(li);
+    });
+  }
+  function openPicker() { $('pick').value = ''; renderPicks(); $('picker').hidden = false; setTimeout(() => $('pick').focus(), 50); }
+  function closePicker() { $('pick').blur(); $('picker').hidden = true; }
+  function submitPick(v) {
+    const a = parseEntry(v);
+    closePicker();
+    if (a) { arm(a); buzz(25); }
+  }
+  $('pick').addEventListener('input', renderPicks);
+  $('pick').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitPick($('pick').value); } });
+  $('pickCancel').addEventListener('click', closePicker);
+
+  // ---- gestures ----
+  function onHold(el, fn, ms) {
+    let t = null, sx = 0, sy = 0;
+    el.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; clearTimeout(t); t = setTimeout(() => { t = null; buzz(15); fn(); }, ms); });
+    el.addEventListener('pointermove', e => { if (Math.hypot(e.clientX - sx, e.clientY - sy) > 12) clearTimeout(t); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => el.addEventListener(n, () => clearTimeout(t)));
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  onHold($('stationZone'), openPicker, 1000);
+  onHold($('clock'), openSheet, 1000);
+  let lastTap = 0;
+  $('clock').addEventListener('pointerup', () => {
+    const now = Date.now();
+    if (now - lastTap < 350) { lastTap = 0; reveal(); } else lastTap = now;
+  });
+
+  // ---- settings screen ----
+  function armText() {
+    if (!armed) return 'Not set. Hold the station name to set one.';
+    return armed.dest + (armed.plat ? ', platform ' + armed.plat : '') + (armed.time ? ', ' + pad2(armed.time.h) + ':' + pad2(armed.time.m) : '') +
+      (armed.name ? ', seat for ' + armed.name.toUpperCase() : '') + '. Waiting to reveal.';
+  }
+  function openSheet() {
+    $('cfgStation').value = cfg.station; $('cfgDelay').value = String(cfg.delay); $('cfgName').value = cfg.name;
+    $('cfgFlap').checked = cfg.flap; $('cfgAnnounce').checked = cfg.announce; $('cfgDot').checked = cfg.dot;
+    $('armStatus').textContent = armText();
+    $('sheet').hidden = false;
+  }
+  function readSheet() {
+    cfg.station = $('cfgStation').value.trim() || DEF.station; cfg.delay = Number($('cfgDelay').value);
+    cfg.name = $('cfgName').value.trim(); cfg.flap = $('cfgFlap').checked; cfg.announce = $('cfgAnnounce').checked; cfg.dot = $('cfgDot').checked;
+    save(); $('stname').textContent = cfg.station;
+  }
+  ['cfgStation', 'cfgDelay', 'cfgName', 'cfgFlap', 'cfgAnnounce', 'cfgDot'].forEach(id => $(id).addEventListener('change', readSheet));
+  $('testSound').addEventListener('click', () => { audio(); announce({ t: addMin(new Date(), 3), dest: 'Whitby', plat: '7', calling: ['York', 'Malton', 'Whitby'], name: cfg.name }); });
+  $('resetBtn').addEventListener('click', () => { arm(null); rows = freshRows(nRows); show(false); $('armStatus').textContent = armText(); buzz(25); });
+  $('close').addEventListener('click', () => { readSheet(); $('sheet').hidden = true; if (armed) arm(armed); });
+
+  // ---- start ----
+  $('stname').textContent = cfg.station;
+  layout(); rows = freshRows(nRows); show(true); tick();
+  let rt = null;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { layout(); show(true); stripMsg = ''; setStrip(); }, 150); });
+  // Keep the screen on while the board sits on the table.
+  function wake() { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {} }
+  wake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
+  if (window.speechSynthesis) speechSynthesis.getVoices();
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
