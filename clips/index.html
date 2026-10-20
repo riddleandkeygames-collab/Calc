@@ -263,7 +263,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 14</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 15</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -286,7 +286,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 13, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 15, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -308,11 +308,25 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     at(61, ['Circle', 'Cross', 'Wavy|lines', 'Square', 'Star']),
     at(71, ['Rose', 'Carrot', 'Chair', '7', '37']),
     at(81, ['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney'])));
+  // Ready-made effects. Symbols are drawings that are inked onto the surface like writing.
+  const SIGNS = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
+  const ESP = ['Circle', 'Cross', 'Wavy|lines', 'Square', 'Star'], ESP_FILES = ['circle', 'cross', 'waves', 'square', 'star'];
+  const drawn = (names, files) => Object.fromEntries(names.map((n, i) => [String(i + 1).padStart(2, '0'), { name: n.replace('|', ' ') + ' (drawn)', src: 'sym/' + files[i] + '.png', ink: true }]));
+  const list = a => lines(at(1, a));
+  const READY = [
+    { id: 'colours', name: 'Colours', outs: list(['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Black', 'White', 'Brown', 'Grey', 'Gold']), pics: {} },
+    { id: 'days', name: 'Days of the week', outs: list(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']), pics: {} },
+    { id: 'months', name: 'Months', outs: list(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']), pics: {} },
+    { id: 'signs', name: 'Star signs', outs: list(SIGNS), pics: {} },
+    { id: 'signsyms', name: 'Star sign symbols', outs: list(SIGNS), pics: drawn(SIGNS.map(x => x + ' symbol'), SIGNS.map(x => x.toLowerCase())) },
+    { id: 'esp', name: 'ESP symbols', outs: list(ESP), pics: drawn(ESP, ESP_FILES) },
+    { id: 'forces', name: 'Common choices', outs: list(['Rose', 'Carrot', 'Chair', '7', '37', 'Red', 'Paris', 'Dog', 'Hammer', 'Apple']), pics: {} },
+    { id: 'cities', name: 'Cities', outs: list(['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney', 'Barcelona', 'Dubai', 'Las Vegas', 'Amsterdam']), pics: {} }
+  ];
   const startSets = (outs, pics) => [
     { id: 'cards', name: 'Playing cards', outs, pics },
-    { id: 'numbers', name: 'Numbers 1 to 99', outs: '', pics: {} },
-    { id: 'everyday', name: 'Everyday choices', outs: EVERYDAY, pics: {} }
-  ];
+    { id: 'numbers', name: 'Numbers 1 to 99', outs: '', pics: {} }
+  ].concat(JSON.parse(JSON.stringify(READY)));
   if (cfg.v < 12) {   // version 12: outs and pictures moved into sets
     cfg.sets = startSets(cfg.outs || CARDS.join('\n'), cfg.pics || {}); cfg.set = 'cards';
     delete cfg.outs; delete cfg.pics; cfg.v = 12;
@@ -327,6 +341,11 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     Object.entries(cfg.scenes).forEach(([id, sc]) => { place[id] = {}; EFFECT_PLACE.forEach(k => { if (k in sc) place[id][k] = sc[k]; }); });
     cfg.sets.forEach(x => { STYLE.forEach(k => { x[k] = cfg[k]; }); x.place = JSON.parse(JSON.stringify(place)); });
     cfg.v = 13;
+  }
+  if (cfg.v < 15) {   // version 15: separate ready-made effects, added after any you already have
+    const look = cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
+    READY.forEach(r => { if (!cfg.sets.some(x => x.id === r.id)) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: JSON.parse(JSON.stringify(look.place || {})) }, Object.fromEntries(STYLE.map(k => [k, look[k] ?? cfg[k]])))); });
+    cfg.v = 15;
   }
   cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
   const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
@@ -514,11 +533,22 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     c.drawImage(img, -pw / 2, -ph / 2, pw, ph);
     c.restore();
   }
+  // A drawing (a symbol) is inked like writing: its shape only, in the marker colour, with the writing's size and position.
+  function drawInkPic(img) {
+    const { w, h } = surfaceSize(scene.quad);
+    ink.width = Math.round(w * 0.8); ink.height = Math.round(h * 0.8);
+    const c = ink.getContext('2d'); c.clearRect(0, 0, ink.width, ink.height);
+    let ph = ink.height * 0.62 * scene.tsize, pw = ph * img.width / img.height;
+    if (pw > ink.width * 0.8 * scene.tsize) { pw = ink.width * 0.8 * scene.tsize; ph = pw * img.height / img.width; }
+    c.save(); c.translate(ink.width * (0.5 + scene.tx), ink.height * (0.5 + scene.ty)); c.rotate(-0.03);
+    c.drawImage(img, -pw / 2, -ph / 2, pw, ph); c.restore();
+  }
+  const isDrawing = k => !!(set().pics[k] && set().pics[k].ink);
   // Draws out n (or nothing, for null) and hands it to the shader.
   function uploadOut(n) {
-    const pic = n !== null && set().pics[nn(n)] && picImgs[nn(n)];
-    const text = n === null || pic ? '' : outText(n);
-    if (pic) drawPic(pic); else drawInk(text);
+    const k = n === null ? '' : nn(n), img = k && set().pics[k] && picImgs[k], drawing = img && isDrawing(k), pic = img && !drawing;
+    const text = n === null || img ? '' : outText(n);
+    if (pic) drawPic(img); else if (drawing) drawInkPic(img); else drawInk(text);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texI);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ink);
     gl.uniform1f(U.mode, pic ? 1 : 0);
@@ -803,9 +833,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   const ADJ = [['adjSize', 'tsize', 'psize', 100, v => v + '%'], ['adjX', 'tx', 'px', 100, sign], ['adjY', 'ty', 'py', -100, sign], ['adjRot', null, 'prot', 1, v => sign(v) + '°'], ['adjOp', 'op', 'op', 100, v => v + '%']];
   let adjOut = 12, adjMode = 'text';
   const keyFor = a => adjMode === 'pic' ? a[2] : a[1];
-  const firstPic = () => Object.keys(set().pics).sort().find(k => picImgs[k]);
+  const firstPic = () => Object.keys(set().pics).sort().find(k => picImgs[k] && !isDrawing(k));
   function previewOut() {
-    const isPic = n => !!(set().pics[nn(n)] && picImgs[nn(n)]);
+    const isPic = n => !!(set().pics[nn(n)] && picImgs[nn(n)] && !isDrawing(nn(n)));
     if (adjMode === 'pic') return isPic(adjOut) ? adjOut : (firstPic() ? +firstPic() : null);
     return isPic(adjOut) ? 12 : adjOut;
   }
@@ -837,7 +867,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   function openPlace(mode) {
     readSheet();
     const n = parseInt($('tryNum').value, 10);
-    adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n; adjMode = mode || (set().pics[nn(adjOut)] ? 'pic' : 'text');
+    adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n; adjMode = mode || (set().pics[nn(adjOut)] && !isDrawing(nn(adjOut)) ? 'pic' : 'text');
     $('sheet').hidden = true; reset(); state = 'place'; $('playBtn').hidden = true;
     $('adjust').hidden = false; $('handles').hidden = false; $('adjBody').hidden = false; $('adjFold').textContent = 'Hide controls';
     // Phones only decode frames once a video has played, so start it silently, stop, and go to the last frame.
