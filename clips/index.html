@@ -96,8 +96,10 @@ body {
 .srow select, .srow input[type=text] { font: 16px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-width: 100%; }
 .srow input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
 textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.6 ui-monospace, Menlo, monospace; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
-.nums { display: flex; gap: 10px; align-items: flex-start; }
-.nums pre { margin: 0; padding: 11px 0; font: 15px/1.6 ui-monospace, Menlo, monospace; color: var(--dim); text-align: right; }
+.outs { display: flex; flex-direction: column; gap: 6px; }
+.out { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 10px; }
+.out label { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.out input { font: 16px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
 .btn { font: 600 15px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
 .btn.primary { background: var(--fg); color: #000; border-color: var(--fg); font-size: 17px; padding: 13px; }
 .keypad { display: grid; grid-template-columns: repeat(3, 56px); gap: 4px; }
@@ -210,9 +212,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 
     <div>
       <h2>Outs</h2>
-      <p style="margin-bottom:10px">One per line. Line 01 is out 01, and so on. Use | to start a new line on the board, e.g. <code>Queen|of Hearts</code>. A blank line writes the number itself. Out 00 leaves the board blank.</p>
-      <div class="nums"><pre id="lineNums"></pre><textarea id="cfgOuts" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></div>
-      <div class="srow" style="border-bottom:0"><label>Put the 52 cards back on lines 01 to 52<br><small>Clubs, Hearts, Spades, Diamonds, each Ace to King.</small></label><button class="btn" id="cardsBtn">Reset cards</button></div>
+      <p style="margin-bottom:10px">What gets written for each number you tap. Use | to start a new line on the board, e.g. <code>Queen|of Hearts</code>. A blank box writes the number itself. Out 00 leaves the board blank.</p>
+      <div class="outs" id="outsList"></div>
+      <div class="srow" style="border-bottom:0"><label>Put the 52 cards back in boxes 01 to 52<br><small>Clubs, Hearts, Spades, Diamonds, each Ace to King.</small></label><button class="btn" id="cardsBtn">Reset cards</button></div>
     </div>
 
     <div>
@@ -222,7 +224,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 7</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 8</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -525,28 +527,34 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     sel.value = cfg.scene;
     $('delRow').hidden = !!SCENES[cfg.scene];
   }
-  function lineNums() {
-    const n = Math.max(99, $('cfgOuts').value.split('\n').length);
-    $('lineNums').textContent = Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, '0')).join('\n');
+  // One box per out, 01 to 99. Stored together as lines of text.
+  function buildOuts() {
+    const list = $('outsList'), lines = cfg.outs.split('\n'); list.textContent = '';
+    for (let i = 1; i <= 99; i++) {
+      const n = String(i).padStart(2, '0'), row = document.createElement('div'); row.className = 'out';
+      const lab = document.createElement('label'); lab.htmlFor = 'out' + n; lab.textContent = n;
+      const inp = document.createElement('input'); inp.type = 'text'; inp.id = 'out' + n; inp.value = lines[i - 1] || '';
+      inp.autocomplete = 'off'; inp.spellcheck = false; inp.placeholder = i + '';
+      row.append(lab, inp); list.appendChild(row);
+    }
   }
-  $('cfgOuts').addEventListener('scroll', () => { $('lineNums').style.transform = 'translateY(' + (-$('cfgOuts').scrollTop) + 'px)'; });
+  const readOuts = () => Array.from({ length: 99 }, (_, i) => $('out' + String(i + 1).padStart(2, '0')).value.replace(/\n/g, ' ')).join('\n').replace(/\n+$/, '');
+  $('outsList').addEventListener('input', () => { cfg.outs = readOuts(); save(); });
   function openSheet() {
     fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek;
-    $('cfgOuts').value = cfg.outs; lineNums();
+    buildOuts();
     $('sheet').hidden = false;
   }
   function readSheet() {
     const sceneChanged = cfg.scene !== $('cfgScene').value;
     cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked;
-    cfg.outs = $('cfgOuts').value; save();
+    cfg.outs = readOuts(); save();
     if (sceneChanged) { loadScene(); $('delRow').hidden = !!SCENES[cfg.scene]; }
   }
   ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek'].forEach(id => $(id).addEventListener('change', readSheet));
-  $('cfgOuts').addEventListener('input', () => { lineNums(); readSheet(); });
   $('cardsBtn').addEventListener('click', () => {
-    const lines = $('cfgOuts').value.split('\n');
-    for (let i = 0; i < 52; i++) lines[i] = CARDS[i];
-    $('cfgOuts').value = lines.join('\n'); lineNums(); readSheet();
+    for (let i = 0; i < 52; i++) $('out' + String(i + 1).padStart(2, '0')).value = CARDS[i];
+    readSheet();
   });
   $('tryBtn').addEventListener('click', () => {
     const n = parseInt($('tryNum').value, 10);
