@@ -130,8 +130,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         </select></div>
       <div class="srow"><label for="cfgInk">Marker colour</label>
         <select id="cfgInk">
-          <option value="navy">Dark blue</option>
           <option value="black">Black</option>
+          <option value="navy">Dark blue</option>
           <option value="red">Red</option>
           <option value="green">Green</option>
         </select></div>
@@ -153,7 +153,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 1</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 2</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -172,9 +172,10 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   const CARDS = SUITS.flatMap(s => VALUES.map(v => v + '|of ' + s));
 
   // ---- settings ----
-  const DEF = { scene: 'towel', ink: 'navy', red: true, peek: true, outs: CARDS.join('\n') };
+  const DEF = { scene: 'towel', ink: 'black', red: false, peek: true, outs: CARDS.join('\n'), v: 2 };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
+  if (cfg.v !== 2) { cfg.ink = 'black'; cfg.red = false; cfg.v = 2; }   // version 2: all writing in black
   const save = () => { try { localStorage.setItem('clips-cfg', JSON.stringify(cfg)); } catch (e) {} };
   const outText = n => {
     if (n === 0) return '';
