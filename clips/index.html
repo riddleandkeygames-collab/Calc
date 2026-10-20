@@ -97,7 +97,9 @@ body {
 .srow input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
 textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.6 ui-monospace, Menlo, monospace; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .outs { display: flex; flex-direction: column; gap: 6px; }
-.out { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 10px; }
+.out { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; }
+.out input:disabled { color: var(--dim); }
+.out .pic { padding: 8px 10px; font-size: 14px; }
 .out label { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
 .out input { font: 16px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
 .btn { font: 600 15px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
@@ -223,8 +225,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 
     <div>
       <h2>Outs</h2>
-      <p style="margin-bottom:10px">What gets written for each number you tap. Use | to start a new line on the board, e.g. <code>Queen|of Hearts</code>. A blank box writes the number itself. Out 00 leaves the board blank.</p>
+      <p style="margin-bottom:10px">What gets written for each number you tap. Use | to start a new line on the board, e.g. <code>Queen|of Hearts</code>. A blank box writes the number itself. Out 00 leaves the board blank. <b>Picture</b> puts an image on the surface instead of writing, such as a photo of a playing card; a PNG with a see-through background works best. Out 60 has an example.</p>
       <div class="outs" id="outsList"></div>
+      <input type="file" id="picFile" accept="image/*" hidden>
       <div class="srow" style="border-bottom:0"><label>Put the 52 cards back in boxes 01 to 52<br><small>Clubs, Hearts, Spades, Diamonds, each Ace to King.</small></label><button class="btn" id="cardsBtn">Reset cards</button></div>
     </div>
 
@@ -235,7 +238,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 9</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 10</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -258,7 +261,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, op: 1, from: 0 };
-  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, outs: CARDS.join('\n'), v: 7, scenes: {}, uploads: [] };
+  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, outs: CARDS.join('\n'), v: 10, scenes: {}, uploads: [], pics: { '60': { name: '7 of Hearts card (example)', src: 'card-7h.png' } } };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -268,6 +271,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     Object.keys(SCENES).forEach(id => { cfg.scenes[id] = Object.assign({}, old); });
     ['tsize', 'tx', 'ty', 'op'].forEach(k => delete cfg[k]); cfg.v = 7;
   }
+  if (cfg.v < 10) { cfg.pics = Object.assign({ '60': { name: '7 of Hearts card (example)', src: 'card-7h.png' } }, cfg.pics || {}); cfg.v = 10; }   // version 10: picture outs, with an example in 60
   const save = () => { try { localStorage.setItem('clips-cfg', JSON.stringify(cfg)); } catch (e) {} };
   save();
   const outText = n => {
@@ -381,7 +385,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, [
       'precision highp float;',
       'varying vec2 uv; uniform sampler2D vid; uniform sampler2D txt; uniform mat3 H; uniform vec2 size; uniform vec3 inkC;',
-      'uniform float on; uniform float tm; uniform float useMask; uniform vec2 ref; uniform float light;',
+      'uniform float on; uniform float tm; uniform float useMask; uniform vec2 ref; uniform float light; uniform float mode;',
       'float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
       'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
       '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }',
@@ -389,12 +393,18 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       '  vec3 c = texture2D(vid, uv).rgb;',
       '  vec3 b = H * vec3(uv * size, 1.0); vec2 bu = b.xy / b.z;',
       '  float a = 0.0;',
-      '  if (b.z > 0.0 && bu.x > 0.0 && bu.x < 1.0 && bu.y > 0.0 && bu.y < 1.0) a = texture2D(txt, bu).a;',
+      '  vec4 im = vec4(0.0);',
+      '  if (b.z > 0.0 && bu.x > 0.0 && bu.x < 1.0 && bu.y > 0.0 && bu.y < 1.0) { im = texture2D(txt, bu); a = im.a; }',
       '  float lum = dot(c, vec3(0.299, 0.587, 0.114));',
       '  float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));',
       // Optional mask: only where the pixel looks like the surface (about as bright, no more colourful), so a cover or a hand hides the writing.
       '  float m = mix(1.0, smoothstep(ref.x - 0.27, ref.x - 0.12, lum) * (1.0 - smoothstep(ref.y + 0.06, ref.y + 0.16, sat)), useMask);',
       // Real ink is patchy, a little grainy like the rest of the footage, and a shiny surface's highlights sit on top of it.
+      // A picture keeps its own colours but takes on the light falling on the surface beneath it, and the footage's grain.
+      '  if (mode > 0.5) {',
+      '    float lit = clamp(lum / max(ref.x, 0.2), 0.55, 1.1) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
+      '    gl_FragColor = vec4(mix(c, im.rgb * lit, a * m * on), 1.0); return;',
+      '  }',
       '  float patch = 0.9 + 0.1 * vnoise(bu * 22.0);',
       '  float grain = 0.94 + 0.12 * hash(floor(uv * size) + floor(tm * 24.0));',
       '  float shine = 1.0 - 0.5 * smoothstep(ref.x + 0.08, ref.x + 0.16, lum) * (1.0 - light);',
@@ -411,7 +421,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.LINEAR)); return t; };
     texV = mk(0); texI = mk(1);
     gl.uniform1i(gl.getUniformLocation(prog, 'vid'), 0); gl.uniform1i(gl.getUniformLocation(prog, 'txt'), 1);
-    ['H', 'size', 'inkC', 'on', 'tm', 'useMask', 'ref', 'light'].forEach(n => { U[n] = gl.getUniformLocation(prog, n); });
+    ['H', 'size', 'inkC', 'on', 'tm', 'useMask', 'ref', 'light', 'mode'].forEach(n => { U[n] = gl.getUniformLocation(prog, n); });
   }
   function setScene() {
     if (cv.width !== scene.w || cv.height !== scene.h) { cv.width = scene.w; cv.height = scene.h; }
@@ -422,10 +432,36 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     gl.uniform2f(U.size, scene.w, scene.h);
     gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
   }
-  function uploadInk(text) {
-    drawInk(text);
+  // ---- picture outs: an image placed on the surface instead of writing ----
+  const picImgs = {};   // '60' -> loaded image
+  const nn = n => String(n).padStart(2, '0');
+  function loadPic(k) {
+    const p = cfg.pics[k]; if (!p) return;
+    const img = new Image();
+    img.onload = () => { picImgs[k] = img; };
+    if (p.src) img.src = p.src;
+    else idb('readonly', st => st.get('pic:' + k)).then(b => { if (b) img.src = URL.createObjectURL(b); }).catch(() => {});
+  }
+  function drawPic(img) {
+    const { w, h } = surfaceSize(scene.quad);
+    ink.width = Math.round(w * 0.8); ink.height = Math.round(h * 0.8);
+    const c = ink.getContext('2d'); c.clearRect(0, 0, ink.width, ink.height);
+    // About half the surface's height, like a card stuck on a board, then your size and position adjustments.
+    let ph = ink.height * 0.55 * scene.tsize, pw = ph * img.width / img.height;
+    if (pw > ink.width * 0.85 * scene.tsize) { pw = ink.width * 0.85 * scene.tsize; ph = pw * img.height / img.width; }
+    c.save(); c.translate(ink.width * (0.5 + scene.tx), ink.height * (0.5 + scene.ty)); c.rotate(-0.05);
+    c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = ph * 0.03; c.shadowOffsetX = ph * 0.012; c.shadowOffsetY = ph * 0.02;
+    c.drawImage(img, -pw / 2, -ph / 2, pw, ph);
+    c.restore();
+  }
+  // Draws out n (or nothing, for null) and hands it to the shader.
+  function uploadOut(n) {
+    const pic = n !== null && cfg.pics[nn(n)] && picImgs[nn(n)];
+    const text = n === null || pic ? '' : outText(n);
+    if (pic) drawPic(pic); else drawInk(text);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texI);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ink);
+    gl.uniform1f(U.mode, pic ? 1 : 0);
     gl.uniform3fv(U.inkC, inkColour(text));
     gl.uniform1f(U.light, cfg.ink === 'white' && !(cfg.red && /hearts|diamonds/i.test(text)) ? 1 : 0);
   }
@@ -480,7 +516,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // out null plays with nothing written yet; fromStart false carries on from where it was paused.
   function play(out, fromStart = true) {
     if (!ready) return;
-    uploadInk(out === null ? '' : outText(out));
+    uploadOut(out);
     video.muted = false; if (fromStart) video.currentTime = 0;
     const p = video.play(); if (p && p.catch) p.catch(() => { video.muted = true; video.play().catch(() => {}); });
     if (!playing) { playing = true; requestAnimationFrame(frame); }
@@ -563,10 +599,41 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       const lab = document.createElement('label'); lab.htmlFor = 'out' + n; lab.textContent = n;
       const inp = document.createElement('input'); inp.type = 'text'; inp.id = 'out' + n; inp.value = lines[i - 1] || '';
       inp.autocomplete = 'off'; inp.spellcheck = false; inp.placeholder = i + '';
-      row.append(lab, inp); list.appendChild(row);
+      const pb = document.createElement('button'); pb.className = 'btn pic'; pb.dataset.n = n;
+      const p = cfg.pics[n];
+      if (p) { inp.value = 'Picture: ' + p.name; inp.disabled = true; inp.dataset.text = lines[i - 1] || ''; pb.textContent = 'Remove'; }
+      else pb.textContent = 'Picture';
+      row.append(lab, inp, pb); list.appendChild(row);
     }
   }
-  const readOuts = () => Array.from({ length: 99 }, (_, i) => $('out' + String(i + 1).padStart(2, '0')).value.replace(/\n/g, ' ')).join('\n').replace(/\n+$/, '');
+  // A box showing a picture keeps the words it had underneath, ready for when the picture is removed.
+  const readOuts = () => Array.from({ length: 99 }, (_, i) => { const el = $('out' + nn(i + 1)); return (el.disabled ? el.dataset.text : el.value).replace(/\n/g, ' '); }).join('\n').replace(/\n+$/, '');
+  let picFor = null;
+  $('outsList').addEventListener('click', async e => {
+    const b = e.target.closest('button.pic'); if (!b) return;
+    const k = b.dataset.n;
+    if (cfg.pics[k]) {   // remove
+      if (!cfg.pics[k].src) idb('readwrite', st => st.delete('pic:' + k)).catch(() => {});
+      cfg.outs = readOuts(); delete cfg.pics[k]; delete picImgs[k]; save(); buildOuts(); return;
+    }
+    picFor = k; $('picFile').click();
+  });
+  $('picFile').addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!file || !picFor) return;
+    const k = picFor; picFor = null;
+    try {
+      // Shrink big photos so they load quickly; PNG keeps any transparent background.
+      const img = await new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = URL.createObjectURL(file); });
+      const sc = Math.min(1, 1200 / Math.max(img.width, img.height)), pc = document.createElement('canvas');
+      pc.width = Math.round(img.width * sc); pc.height = Math.round(img.height * sc);
+      pc.getContext('2d').drawImage(img, 0, 0, pc.width, pc.height);
+      const blob = await new Promise(ok => pc.toBlob(ok, 'image/png'));
+      await idb('readwrite', st => st.put(blob, 'pic:' + k));
+      cfg.outs = readOuts(); cfg.pics[k] = { name: file.name.replace(/\.[^.]+$/, '').slice(0, 30) || 'picture' }; save();
+      loadPic(k); buildOuts();
+    } catch (err) { const el = $('out' + k); el.value = ''; el.placeholder = 'Couldn’t use that picture. Try a JPEG or PNG.'; }
+  });
   $('outsList').addEventListener('input', () => { cfg.outs = readOuts(); save(); });
   function openSheet() {
     fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgResume').value = cfg.resume;
@@ -581,7 +648,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   }
   ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek', 'cfgEntry', 'cfgResume'].forEach(id => $(id).addEventListener('change', readSheet));
   $('cardsBtn').addEventListener('click', () => {
-    for (let i = 0; i < 52; i++) $('out' + String(i + 1).padStart(2, '0')).value = CARDS[i];
+    for (let i = 0; i < 52; i++) { const el = $('out' + nn(i + 1)); if (el.disabled) el.dataset.text = CARDS[i]; else el.value = CARDS[i]; }
     readSheet();
   });
   $('tryBtn').addEventListener('click', () => {
@@ -631,7 +698,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 
   // ---- placing the writing: drag the corners on a frame of the video ----
   const ADJ = [['adjSize', 'tsize', 100, v => v + '%'], ['adjX', 'tx', 100, v => (v > 0 ? '+' : '') + v], ['adjY', 'ty', -100, v => (v > 0 ? '+' : '') + v], ['adjOp', 'op', 100, v => v + '%']];
-  let adjText = '';
+  let adjOut = 12;
   // The picture fills the screen and is cropped to fit, as in playback; convert between screen and video pixels.
   function fit() { const k = Math.max(innerWidth / scene.w, innerHeight / scene.h); return { k, ox: (innerWidth - scene.w * k) / 2, oy: (innerHeight - scene.h * k) / 2 }; }
   const toScreen = ([x, y]) => { const f = fit(); return [f.ox + x * f.k, f.oy + y * f.k]; };
@@ -649,12 +716,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('adjMask').checked = scene.mask;
     $('adjFromV').textContent = scene.from > 0 ? 'Writing shows from ' + scene.from.toFixed(1) + ' s' : 'Writing shows from the start';
     $('adjFrom').textContent = scene.from > 0 ? 'Show from the start' : 'Show from this frame';
-    setScene(); uploadInk(adjText); frame(); drawHandles();
+    setScene(); uploadOut(adjOut); frame(); drawHandles();
   }
   function openPlace() {
     readSheet();
     const n = parseInt($('tryNum').value, 10);
-    adjText = outText(isNaN(n) || n < 1 || n > 99 ? 12 : n) || 'Queen|of Clubs';
+    adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n;
     $('sheet').hidden = true; reset(); state = 'place'; $('playBtn').hidden = true;
     $('adjust').hidden = false; $('handles').hidden = false; $('adjBody').hidden = false; $('adjFold').textContent = 'Hide controls';
     // Phones only decode frames once a video has played, so start it silently, stop, and go to the last frame.
@@ -708,7 +775,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const p = toVideo(e.clientX, e.clientY), q = drag.quad.map(v => v.slice());
     if (drag.i === 'move') { const dx = p[0] - drag.start[0], dy = p[1] - drag.start[1]; q.forEach(v => { v[0] += dx; v[1] += dy; }); }
     else q[+drag.i] = p;
-    scene.quad = q; setScene(); uploadInk(adjText); frame(); drawHandles();
+    scene.quad = q; setScene(); uploadOut(adjOut); frame(); drawHandles();
   });
   const endDrag = () => { if (drag) { setOwn({ quad: scene.quad }); drag = null; } };
   $('handles').addEventListener('pointerup', endDrag); $('handles').addEventListener('pointercancel', endDrag);
@@ -719,6 +786,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- start ----
   if (!gl) { $('loading').textContent = 'This phone can’t show the video effect.'; return; }
   initGL(); fillScenes(); loadScene(); reset();
+  Object.keys(cfg.pics).forEach(loadPic);
   // Draw the writing once the marker font has arrived, so the first play never falls back to a plain font.
   function loadFont() { if (document.fonts && document.fonts.load) document.fonts.load(fontOf(40)).catch(() => {}); }
   loadFont();
