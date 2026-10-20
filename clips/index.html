@@ -108,6 +108,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 .btn { font: 600 15px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
 .btn.primary { background: var(--fg); color: #000; border-color: var(--fg); font-size: 17px; padding: 13px; }
 .setbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.effect { display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; }
+.effect select, .effect input[type=text] { background: #2c2c2e; }
 .quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .quick .btn { padding: 12px; line-height: 1.3; }
 .quick small { color: var(--dim); font-weight: 500; }
@@ -160,8 +162,13 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   <div class="sheet-inner">
     <h1>Magician settings</h1>
 
-    <div class="srow" style="padding-top:0"><label for="setSel"><b>Effect</b><br><small>Which set of outs to use. Edit them under Outs below.</small></label>
-      <select id="setSel"></select></div>
+    <div class="effect">
+      <div class="srow" style="padding-top:0"><label for="setSel"><b>Effect</b><br><small>Each effect remembers its own outs and pictures, video, handwriting, ink colour, and the size and position of the writing and pictures.</small></label>
+        <select id="setSel"></select></div>
+      <div class="srow"><label for="setName">Name of this effect</label><input type="text" id="setName" autocomplete="off"></div>
+      <div class="setbtns"><button class="btn" id="setNew">New effect</button><button class="btn" id="setCopy">Copy effect</button><button class="btn" id="setDel">Delete effect</button></div>
+      <p class="note" id="setMsg" hidden></p>
+    </div>
 
     <div class="quick">
       <button class="btn" id="placeText">Size and position<br><small>of the writing</small></button>
@@ -243,9 +250,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 
     <div>
       <h2>Outs</h2>
-      <div class="srow" style="padding-top:0"><label for="setName">Name of this set</label><input type="text" id="setName" autocomplete="off"></div>
-      <div class="setbtns"><button class="btn" id="setCopy">Copy this set</button><button class="btn" id="setNew">New empty set</button><button class="btn" id="setDel">Delete this set</button></div>
-      <p style="margin:10px 0">What gets written for each number you tap. Use | to start a new line on the board, e.g. <code>Queen|of Hearts</code>. A blank box writes the number itself. Out 00 leaves the board blank. <b>Picture</b> puts an image on the surface instead of writing, such as a photo of a playing card; a PNG with a see-through background works best. Out 60 has an example.</p>
+      <p style="margin:0 0 10px">These belong to the effect chosen at the top. What gets written for each number you tap. Use | to start a new line on the board, e.g. <code>Queen|of Hearts</code>. A blank box writes the number itself. Out 00 leaves the board blank. <b>Picture</b> puts an image on the surface instead of writing, such as a photo of a playing card; a PNG with a see-through background works best. Out 60 has an example.</p>
       <div class="outs" id="outsList"></div>
       <input type="file" id="picFile" accept="image/*" hidden>
       <div class="srow" style="border-bottom:0"><label>Put the 52 cards back in boxes 01 to 52<br><small>Clubs, Hearts, Spades, Diamonds, each Ace to King.</small></label><button class="btn" id="cardsBtn">Reset cards</button></div>
@@ -258,7 +263,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 13</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 14</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -281,7 +286,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 12, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 13, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -313,7 +318,19 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     delete cfg.outs; delete cfg.pics; cfg.v = 12;
   }
   if (!cfg.sets) cfg.sets = startSets(CARDS.join('\n'), { '60': { name: '7 of Hearts card (example)', src: 'card-7h.png' } });   // a fresh install
+  // An effect also remembers its look: video, handwriting, ink, and the size and position of writing and pictures on each video.
+  // (The surface corners, masking and start time belong to the video, so they're shared by every effect.)
+  const STYLE = ['scene', 'font', 'ink', 'red'];
+  const EFFECT_PLACE = ['tsize', 'tx', 'ty', 'psize', 'px', 'py', 'prot', 'op'];
+  if (cfg.v < 13) {   // version 13: effects remember their style and placement
+    const place = {};
+    Object.entries(cfg.scenes).forEach(([id, sc]) => { place[id] = {}; EFFECT_PLACE.forEach(k => { if (k in sc) place[id][k] = sc[k]; }); });
+    cfg.sets.forEach(x => { STYLE.forEach(k => { x[k] = cfg[k]; }); x.place = JSON.parse(JSON.stringify(place)); });
+    cfg.v = 13;
+  }
+  cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
   const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
+  STYLE.forEach(k => { cfg[k] = set()[k]; });
   const save = () => { try { localStorage.setItem('clips-cfg', JSON.stringify(cfg)); } catch (e) {} };
   save();
   const outText = n => {
@@ -335,7 +352,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const b = SCENES[id] || upload(id) || SCENES.cloth, key = SCENES[id] || upload(id) ? id : 'cloth';
     const own = cfg.scenes[key] || (cfg.scenes[key] = {});
     const base = { quad: b.quad || defaultQuad(b.w, b.h), mask: !!SCENES[key], ref: [0.82, 0.03] };
-    return Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster }, base, PLACE, own, { own });
+    const eff = set().place[key] || (set().place[key] = {});
+    return Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster }, base, PLACE, own, eff, { own, eff });
   }
 
   // ---- maths: homography taking video pixels to surface coordinates (0..1), and back ----
@@ -689,23 +707,29 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     sel.value = set().id; $('setName').value = set().name; $('setDel').disabled = cfg.sets.length < 2;
   }
   function useSet(id) {
-    cfg.set = id; save();
+    cfg.set = id;
+    const before = cfg.scene; STYLE.forEach(k => { cfg[k] = set()[k]; }); save();
     Object.keys(picImgs).forEach(k => delete picImgs[k]); Object.keys(set().pics).forEach(loadPic);
+    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; loadFont();
+    if (cfg.scene !== before) loadScene(); else scene = sceneOf(cfg.scene);
     fillSets(); buildOuts();
   }
+  const setMsg = t => { $('setMsg').textContent = t; $('setMsg').hidden = !t; clearTimeout(setMsg.t); setMsg.t = setTimeout(() => { $('setMsg').hidden = true; }, 6000); };
   function addSet(name, outs, pics) {
     set().outs = readOuts();
-    const id = 's' + Date.now(); cfg.sets.push({ id, name, outs, pics }); useSet(id);
+    const id = 's' + Date.now(), cur = set(), copy = JSON.parse(JSON.stringify(cur));
+    cfg.sets.push(Object.assign(copy, { id, name, outs, pics })); useSet(id);
+    $('setName').focus(); $('setName').select();
   }
   $('setSel').addEventListener('change', () => { set().outs = readOuts(); useSet($('setSel').value); });
   $('setName').addEventListener('input', () => { set().name = $('setName').value.trim() || 'Untitled'; save(); $('setSel').selectedOptions[0].textContent = set().name; });
-  $('setCopy').addEventListener('click', () => addSet('Copy of ' + set().name, readOuts(), JSON.parse(JSON.stringify(set().pics))));
-  $('setNew').addEventListener('click', () => addSet('New set', '', {}));
+  $('setCopy').addEventListener('click', () => { addSet('Copy of ' + set().name, readOuts(), JSON.parse(JSON.stringify(set().pics))); setMsg('Copied. Give it a name, then change whatever you like.'); });
+  $('setNew').addEventListener('click', () => { addSet('New effect', '', {}); setMsg('New effect with empty outs, using the current video and look. Name it, then fill in the outs below.'); });
   let setDelArmed = null;
   $('setDel').addEventListener('click', () => {
     if (cfg.sets.length < 2) return;
-    if (!setDelArmed) { $('setDel').textContent = 'Tap again to delete'; setDelArmed = setTimeout(() => { setDelArmed = null; $('setDel').textContent = 'Delete this set'; }, 3000); return; }
-    clearTimeout(setDelArmed); setDelArmed = null; $('setDel').textContent = 'Delete this set';
+    if (!setDelArmed) { $('setDel').textContent = 'Tap again to delete'; setDelArmed = setTimeout(() => { setDelArmed = null; $('setDel').textContent = 'Delete effect'; }, 3000); return; }
+    clearTimeout(setDelArmed); setDelArmed = null; $('setDel').textContent = 'Delete effect';
     const gone = set(); cfg.sets = cfg.sets.filter(x => x !== gone);
     Object.entries(gone.pics).forEach(([k, p]) => { const key = p.key || 'pic:' + k; if (!p.src && !inUse(key)) idb('readwrite', st => st.delete(key)).catch(() => {}); });
     useSet(cfg.sets[0].id);
@@ -718,6 +742,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   function readSheet() {
     const sceneChanged = cfg.scene !== $('cfgScene').value;
     cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked; cfg.entry = $('cfgEntry').value; cfg.resume = $('cfgResume').value;
+    STYLE.forEach(k => { set()[k] = cfg[k]; });
     set().outs = readOuts(); save();
     if (sceneChanged) { loadScene(); $('delRow').hidden = !!SCENES[cfg.scene]; }
   }
@@ -754,7 +779,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       URL.revokeObjectURL(u);
       const id = 'u' + Date.now(), name = file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'My video';
       await idb('readwrite', st => st.put({ video: file, poster }, id));
-      cfg.uploads.push({ id, name, w, h }); cfg.scene = id; save();
+      cfg.uploads.push({ id, name, w, h }); cfg.scene = set().scene = id; save();
       note(''); await loadScene(); fillScenes();
       openPlace();   // straight on to placing the writing
     } catch (err) {
@@ -767,7 +792,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     clearTimeout(delArmed); delArmed = null; $('delBtn').textContent = 'Delete';
     const id = scene.id;
     try { await idb('readwrite', st => st.delete(id)); } catch (e) {}
-    cfg.uploads = cfg.uploads.filter(u => u.id !== id); delete cfg.scenes[id]; cfg.scene = 'cloth'; save();
+    cfg.uploads = cfg.uploads.filter(u => u.id !== id); delete cfg.scenes[id]; cfg.scene = 'cloth';
+    cfg.sets.forEach(x => { if (x.scene === id) x.scene = 'cloth'; delete x.place[id]; }); save();
     await loadScene(); fillScenes();
   });
 
@@ -787,7 +813,10 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   function fit() { const k = Math.max(innerWidth / scene.w, innerHeight / scene.h); return { k, ox: (innerWidth - scene.w * k) / 2, oy: (innerHeight - scene.h * k) / 2 }; }
   const toScreen = ([x, y]) => { const f = fit(); return [f.ox + x * f.k, f.oy + y * f.k]; };
   const toVideo = (x, y) => { const f = fit(); return [Math.min(scene.w, Math.max(0, (x - f.ox) / f.k)), Math.min(scene.h, Math.max(0, (y - f.oy) / f.k))]; };
-  function setOwn(patch) { Object.assign(scene.own, patch); Object.assign(scene, patch); save(); }
+  function setOwn(patch) {   // size, position, tilt and opacity go to the effect; the rest to the video
+    Object.entries(patch).forEach(([k, v]) => { (EFFECT_PLACE.includes(k) ? scene.eff : scene.own)[k] = v; });
+    Object.assign(scene, patch); save();
+  }
   function drawHandles() {
     const pts = scene.quad.map(toScreen);
     document.querySelectorAll('.h.corner').forEach((el, i) => { el.style.left = pts[i][0] + 'px'; el.style.top = pts[i][1] + 'px'; });
