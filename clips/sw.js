@@ -1,4 +1,4 @@
-const CACHE = 'clips-v2';
+const CACHE = 'clips-v3';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'cloth.mp4', 'cloth.jpg', 'towel.mp4', 'towel.jpg', 'board.mp4', 'board.jpg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
