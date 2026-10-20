@@ -107,6 +107,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 .out input { font: 16px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
 .btn { font: 600 15px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
 .btn.primary { background: var(--fg); color: #000; border-color: var(--fg); font-size: 17px; padding: 13px; }
+.quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.quick .btn { padding: 12px; line-height: 1.3; }
+.quick small { color: var(--dim); font-weight: 500; }
 .keypad { display: grid; grid-template-columns: repeat(3, 56px); gap: 4px; }
 .keypad span { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; text-align: center; padding: 8px 0; font-weight: 600; }
 .keypad .zero { grid-column: 1 / span 3; }
@@ -155,6 +158,11 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-inner">
     <h1>Magician settings</h1>
+
+    <div class="quick">
+      <button class="btn" id="placeText">Size and position<br><small>of the writing</small></button>
+      <button class="btn" id="placePic">Size and position<br><small>of pictures</small></button>
+    </div>
 
     <div>
       <h2>Secret keypad</h2>
@@ -244,7 +252,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 11</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 12</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -736,10 +744,10 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('adjFrom').textContent = scene.from > 0 ? 'Show from the start' : 'Show from this frame';
     setScene(); uploadOut(out); frame(); drawHandles();
   }
-  function openPlace() {
+  function openPlace(mode) {
     readSheet();
     const n = parseInt($('tryNum').value, 10);
-    adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n; adjMode = cfg.pics[nn(adjOut)] ? 'pic' : 'text';
+    adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n; adjMode = mode || (cfg.pics[nn(adjOut)] ? 'pic' : 'text');
     $('sheet').hidden = true; reset(); state = 'place'; $('playBtn').hidden = true;
     $('adjust').hidden = false; $('handles').hidden = false; $('adjBody').hidden = false; $('adjFold').textContent = 'Hide controls';
     // Phones only decode frames once a video has played, so start it silently, stop, and go to the last frame.
@@ -781,7 +789,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     setOwn(Object.assign({ quad: q.map(p => p.slice()), mask: !!b, ref: [0.82, 0.03] }, PLACE)); placeDraw();
   });
   $('adjDone').addEventListener('click', () => { $('adjust').hidden = true; $('handles').hidden = true; reset(); openSheet(); });
-  $('adjBtn').addEventListener('click', openPlace);
+  $('adjBtn').addEventListener('click', () => openPlace());
+  $('placeText').addEventListener('click', () => openPlace('text'));
+  $('placePic').addEventListener('click', () => openPlace('pic'));
   // Dragging a corner moves that corner; dragging ✥ moves the whole area.
   let drag = null;
   $('handles').addEventListener('pointerdown', e => {
