@@ -125,7 +125,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       <h2>Video</h2>
       <div class="srow"><label for="cfgScene">Scene</label>
         <select id="cfgScene">
-          <option value="towel">Tea towel lifted off the board</option>
+          <option value="cloth">Black cloth lifted off the board</option>
+          <option value="towel">Grey tea towel lifted off the board</option>
           <option value="board">Board only</option>
         </select></div>
       <div class="srow"><label for="cfgInk">Marker colour</label>
@@ -153,7 +154,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 2</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 3</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -164,6 +165,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 
   // Board corners (inner white area) in each video's own pixels: top-left, top-right, bottom-right, bottom-left.
   const SCENES = {
+    cloth: { src: 'cloth.mp4', poster: 'cloth.jpg', w: 1080, h: 1920, quad: [[315, 615], [952.5, 603], [922.5, 1342.5], [237, 1287]], label: 'Kitchen' },
     towel: { src: 'towel.mp4', poster: 'towel.jpg', w: 720, h: 1280, quad: [[220, 408], [618, 415], [613, 892], [172, 865]], label: 'Kitchen' },
     board: { src: 'board.mp4', poster: 'board.jpg', w: 1080, h: 1920, quad: [[327, 618], [967.5, 612], [933, 1347], [273, 1293]], label: 'Kitchen' }
   };
@@ -172,10 +174,10 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   const CARDS = SUITS.flatMap(s => VALUES.map(v => v + '|of ' + s));
 
   // ---- settings ----
-  const DEF = { scene: 'towel', ink: 'black', red: false, peek: true, outs: CARDS.join('\n'), v: 2 };
+  const DEF = { scene: 'cloth', ink: 'black', red: false, peek: true, outs: CARDS.join('\n'), v: 3 };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
-  if (cfg.v !== 2) { cfg.ink = 'black'; cfg.red = false; cfg.v = 2; }   // version 2: all writing in black
+  if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
   const save = () => { try { localStorage.setItem('clips-cfg', JSON.stringify(cfg)); } catch (e) {} };
   const outText = n => {
     if (n === 0) return '';
@@ -285,12 +287,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   }
 
   // ---- video ----
-  let scene = SCENES[cfg.scene] || SCENES.towel;
+  let scene = SCENES[cfg.scene] || SCENES.cloth;
   const video = document.createElement('video');
   video.playsInline = true; video.setAttribute('playsinline', ''); video.setAttribute('webkit-playsinline', ''); video.preload = 'auto';
   let ready = false, playing = false;
   async function loadScene() {
-    scene = SCENES[cfg.scene] || SCENES.towel;
+    scene = SCENES[cfg.scene] || SCENES.cloth;
     ready = false; $('loading').hidden = false;
     $('poster').src = scene.poster; $('poster').hidden = false; cv.hidden = true;
     $('t2').textContent = stamp();
