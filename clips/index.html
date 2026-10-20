@@ -152,16 +152,17 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       <h2>Secret keypad</h2>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <div class="keypad" aria-label="Keypad layout"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span class="zero">0</span></div>
-        <p style="flex:1 1 200px">The whole screen is split into four rows of equal height. The bottom row is all 0. Tap two digits, then the next tap anywhere plays the video.</p>
+        <p style="flex:1 1 200px">The whole screen is split into four rows of equal height. The bottom row is all 0. Only where you tap for a digit matters; the tap that starts the video can be anywhere.</p>
       </div>
     </div>
 
     <div>
       <h2>Controls</h2>
       <ul>
-        <li><b>Tap two digits:</b> sets the out (01 to 99). Nothing visible happens, except the confirmation below.</li>
-        <li><b>Confirmation:</b> the file size under the date changes to <b>4.NN MB</b>, where NN is the out you tapped. 4.07 MB means out 07.</li>
-        <li><b>Next tap, anywhere:</b> plays the video. Hand the phone over and let them press play.</li>
+        <li><b>Play, pause, play</b> (the usual way): tap anywhere to play the video. Tap again to pause it: <b>where</b> you tap is the first digit. Tap to play it again: where you tap is the second digit, and the writing is set. To anyone watching, you just paused the video for a moment.</li>
+        <li><b>Do the pause before the reveal.</b> If the writing would already be showing when you pause, choose “Start again from the beginning” below, so nobody sees it appear.</li>
+        <li><b>Digits first</b> (the other way): tap two digits on the still picture, then the next tap anywhere plays.</li>
+        <li><b>Confirmation:</b> once both digits are in, the file size under the date changes to <b>4.NN MB</b>, where NN is the out. 4.07 MB means out 07.</li>
         <li><b>Swipe left or right:</b> clears the digits and goes back to the start. Use it if you mistype.</li>
         <li><b>Hold anywhere (1.5 seconds):</b> opens this screen.</li>
       </ul>
@@ -197,6 +198,16 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
           <option value="white">White (chalk, dark surfaces)</option>
         </select></div>
       <div class="srow"><label for="cfgRed">Red marker for hearts and diamonds</label><input type="checkbox" id="cfgRed"></div>
+      <div class="srow"><label for="cfgEntry">How you tap in the out</label>
+        <select id="cfgEntry">
+          <option value="pause">Play, pause, play</option>
+          <option value="first">Digits first, then play</option>
+        </select></div>
+      <div class="srow"><label for="cfgResume">After the second digit</label>
+        <select id="cfgResume">
+          <option value="carry">Carry on from the pause</option>
+          <option value="start">Start again from the beginning</option>
+        </select></div>
       <div class="srow"><label for="cfgPeek">Show the confirmation in the file size</label><input type="checkbox" id="cfgPeek"></div>
     </div>
 
@@ -224,7 +235,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 8</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 9</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -247,7 +258,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, op: 1, from: 0 };
-  const DEF = { scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, outs: CARDS.join('\n'), v: 7, scenes: {}, uploads: [] };
+  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, outs: CARDS.join('\n'), v: 7, scenes: {}, uploads: [] };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -466,14 +477,20 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('tNow').textContent = fmt(video.currentTime);
     if (playing) requestAnimationFrame(frame);
   }
-  function play(out) {
+  // out null plays with nothing written yet; fromStart false carries on from where it was paused.
+  function play(out, fromStart = true) {
     if (!ready) return;
-    uploadInk(outText(out));
-    video.muted = false; video.currentTime = 0;
+    uploadInk(out === null ? '' : outText(out));
+    video.muted = false; if (fromStart) video.currentTime = 0;
     const p = video.play(); if (p && p.catch) p.catch(() => { video.muted = true; video.play().catch(() => {}); });
-    playing = true; $('playBtn').hidden = true; requestAnimationFrame(frame);
+    if (!playing) { playing = true; requestAnimationFrame(frame); }
+    $('playBtn').hidden = true;
   }
-  video.addEventListener('ended', () => { playing = false; frame(); });
+  function pause() { video.pause(); $('playBtn').hidden = false; }
+  video.addEventListener('ended', () => {
+    playing = false; frame();
+    if (state === 'running') { state = 'idle'; digits = ''; $('playBtn').hidden = false; }   // ran out before any digits: start over
+  });
 
   // ---- the secret keypad ----
   let digits = '', state = 'idle';   // idle -> armed (two digits) -> played
@@ -491,6 +508,17 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('scrubFill').style.width = '0'; $('tNow').textContent = '0:00'; $('t2').textContent = stamp();
   }
   function onTap(x, y) {
+    if (cfg.entry === 'pause') {
+      // Play, pause, play: tap 1 plays (anywhere), tap 2 pauses and is the first digit, tap 3 is the second digit and plays on.
+      if (state === 'idle') { state = 'running'; play(null); }
+      else if (state === 'running') { pause(); digits = keyAt(x, y); state = 'paused'; }
+      else if (state === 'paused') {
+        digits += keyAt(x, y); state = 'played'; $('t2').textContent = stamp();
+        play(+digits, cfg.resume === 'start');
+      }
+      return;
+    }
+    // Digits first: two taps set the out, the next tap plays.
     if (state === 'idle') {
       digits += keyAt(x, y);
       if (digits.length === 2) state = 'armed';
@@ -541,17 +569,17 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   const readOuts = () => Array.from({ length: 99 }, (_, i) => $('out' + String(i + 1).padStart(2, '0')).value.replace(/\n/g, ' ')).join('\n').replace(/\n+$/, '');
   $('outsList').addEventListener('input', () => { cfg.outs = readOuts(); save(); });
   function openSheet() {
-    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek;
+    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgResume').value = cfg.resume;
     buildOuts();
     $('sheet').hidden = false;
   }
   function readSheet() {
     const sceneChanged = cfg.scene !== $('cfgScene').value;
-    cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked;
+    cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked; cfg.entry = $('cfgEntry').value; cfg.resume = $('cfgResume').value;
     cfg.outs = readOuts(); save();
     if (sceneChanged) { loadScene(); $('delRow').hidden = !!SCENES[cfg.scene]; }
   }
-  ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek'].forEach(id => $(id).addEventListener('change', readSheet));
+  ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek', 'cfgEntry', 'cfgResume'].forEach(id => $(id).addEventListener('change', readSheet));
   $('cardsBtn').addEventListener('click', () => {
     for (let i = 0; i < 52; i++) $('out' + String(i + 1).padStart(2, '0')).value = CARDS[i];
     readSheet();
