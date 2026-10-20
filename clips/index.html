@@ -64,6 +64,9 @@ body {
 .adj-btns { display: flex; gap: 10px; justify-content: flex-end; }
 .adj-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex: none; }
 .adj-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.seg { display: flex; background: var(--panel); border-radius: 9px; padding: 2px; }
+.seg button { flex: 1; border: 0; background: none; color: var(--dim); padding: 7px; border-radius: 7px; font: 600 14px var(--ui); cursor: pointer; }
+.seg button.on { background: #3a3a3c; color: var(--fg); }
 .adj-help { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.4; }
 .adj-check { display: grid; grid-template-columns: 22px 1fr; gap: 2px 10px; align-items: start; font-size: 14px; }
 .adj-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--fg); }
@@ -132,13 +135,16 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 </div>
 
 <div class="adjust" id="adjust" hidden>
-  <div class="adj-head"><b>Place the writing</b><span class="adj-btns"><button class="btn" id="adjFold">Hide controls</button><button class="btn primary" id="adjDone">Done</button></span></div>
+  <div class="adj-head"><b>Placement</b><span class="adj-btns"><button class="btn" id="adjFold">Hide controls</button><button class="btn primary" id="adjDone">Done</button></span></div>
   <div class="adj-body" id="adjBody">
     <p class="adj-help">Drag the corners onto the surface, or ✥ to move it. Hide controls to see the whole picture.</p>
     <div class="adj-row"><label for="adjTime">Frame</label><input type="range" id="adjTime" min="0" max="1000" step="1"><output id="adjTimeV"></output></div>
+    <div class="seg" id="adjMode" role="group" aria-label="What to adjust"><button data-m="text" class="on">Writing</button><button data-m="pic">Picture</button></div>
+    <p class="adj-help" id="picNote" hidden>No picture outs yet. Add a picture to an out in settings first.</p>
     <div class="adj-row"><label for="adjSize">Size</label><input type="range" id="adjSize" min="30" max="160" step="1"><output id="adjSizeV"></output></div>
     <div class="adj-row"><label for="adjX">Left / right</label><input type="range" id="adjX" min="-45" max="45" step="1"><output id="adjXV"></output></div>
     <div class="adj-row"><label for="adjY">Up / down</label><input type="range" id="adjY" min="-45" max="45" step="1"><output id="adjYV"></output></div>
+    <div class="adj-row" id="rotRow" hidden><label for="adjRot">Tilt</label><input type="range" id="adjRot" min="-25" max="25" step="1"><output id="adjRotV"></output></div>
     <div class="adj-row"><label for="adjOp">Opacity</label><input type="range" id="adjOp" min="20" max="100" step="1"><output id="adjOpV"></output></div>
     <label class="adj-check"><input type="checkbox" id="adjMask"> Hide the writing behind anything darker than the surface<small>For light surfaces: a cover or hand in front hides it. Turn on while the surface is clear.</small></label>
     <div class="adj-row2"><span id="adjFromV">Writing shows from the start</span><button class="btn" id="adjFrom">Show from this frame</button></div>
@@ -238,7 +244,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 10</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 11</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -260,7 +266,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
-  const PLACE = { tsize: 1, tx: 0, ty: 0, op: 1, from: 0 };
+  const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
   const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, outs: CARDS.join('\n'), v: 10, scenes: {}, uploads: [], pics: { '60': { name: '7 of Hearts card (example)', src: 'card-7h.png' } } };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
@@ -446,10 +452,10 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const { w, h } = surfaceSize(scene.quad);
     ink.width = Math.round(w * 0.8); ink.height = Math.round(h * 0.8);
     const c = ink.getContext('2d'); c.clearRect(0, 0, ink.width, ink.height);
-    // About half the surface's height, like a card stuck on a board, then your size and position adjustments.
-    let ph = ink.height * 0.55 * scene.tsize, pw = ph * img.width / img.height;
-    if (pw > ink.width * 0.85 * scene.tsize) { pw = ink.width * 0.85 * scene.tsize; ph = pw * img.height / img.width; }
-    c.save(); c.translate(ink.width * (0.5 + scene.tx), ink.height * (0.5 + scene.ty)); c.rotate(-0.05);
+    // About half the surface's height, like a card stuck on a board, then the picture's own size, position and tilt.
+    let ph = ink.height * 0.55 * scene.psize, pw = ph * img.width / img.height;
+    if (pw > ink.width * 0.85 * scene.psize) { pw = ink.width * 0.85 * scene.psize; ph = pw * img.height / img.width; }
+    c.save(); c.translate(ink.width * (0.5 + scene.px), ink.height * (0.5 + scene.py)); c.rotate(scene.prot * Math.PI / 180);
     c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = ph * 0.03; c.shadowOffsetX = ph * 0.012; c.shadowOffsetY = ph * 0.02;
     c.drawImage(img, -pw / 2, -ph / 2, pw, ph);
     c.restore();
@@ -697,8 +703,17 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   });
 
   // ---- placing the writing: drag the corners on a frame of the video ----
-  const ADJ = [['adjSize', 'tsize', 100, v => v + '%'], ['adjX', 'tx', 100, v => (v > 0 ? '+' : '') + v], ['adjY', 'ty', -100, v => (v > 0 ? '+' : '') + v], ['adjOp', 'op', 100, v => v + '%']];
-  let adjOut = 12;
+  // Writing and pictures each have their own size and position; the same sliders adjust whichever is chosen.
+  const sign = v => (v > 0 ? '+' : '') + v;
+  const ADJ = [['adjSize', 'tsize', 'psize', 100, v => v + '%'], ['adjX', 'tx', 'px', 100, sign], ['adjY', 'ty', 'py', -100, sign], ['adjRot', null, 'prot', 1, v => sign(v) + '°'], ['adjOp', 'op', 'op', 100, v => v + '%']];
+  let adjOut = 12, adjMode = 'text';
+  const keyFor = a => adjMode === 'pic' ? a[2] : a[1];
+  const firstPic = () => Object.keys(cfg.pics).sort().find(k => picImgs[k]);
+  function previewOut() {
+    const isPic = n => !!(cfg.pics[nn(n)] && picImgs[nn(n)]);
+    if (adjMode === 'pic') return isPic(adjOut) ? adjOut : (firstPic() ? +firstPic() : null);
+    return isPic(adjOut) ? 12 : adjOut;
+  }
   // The picture fills the screen and is cropped to fit, as in playback; convert between screen and video pixels.
   function fit() { const k = Math.max(innerWidth / scene.w, innerHeight / scene.h); return { k, ox: (innerWidth - scene.w * k) / 2, oy: (innerHeight - scene.h * k) / 2 }; }
   const toScreen = ([x, y]) => { const f = fit(); return [f.ox + x * f.k, f.oy + y * f.k]; };
@@ -712,16 +727,19 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('quadPoly').setAttribute('points', pts.map(p => p.join(',')).join(' '));
   }
   function placeDraw() {
-    ADJ.forEach(([id, key, k, f]) => { $(id).value = Math.round(scene[key] * k); $(id + 'V').textContent = f(+$(id).value); });
+    ADJ.forEach(a => { const key = keyFor(a); if (!key) return; $(a[0]).value = Math.round(scene[key] * a[3]); $(a[0] + 'V').textContent = a[4](+$(a[0]).value); });
+    document.querySelectorAll('#adjMode button').forEach(b => b.classList.toggle('on', b.dataset.m === adjMode));
+    const out = previewOut();
+    $('rotRow').hidden = adjMode !== 'pic'; $('picNote').hidden = !(adjMode === 'pic' && out === null);
     $('adjMask').checked = scene.mask;
     $('adjFromV').textContent = scene.from > 0 ? 'Writing shows from ' + scene.from.toFixed(1) + ' s' : 'Writing shows from the start';
     $('adjFrom').textContent = scene.from > 0 ? 'Show from the start' : 'Show from this frame';
-    setScene(); uploadOut(adjOut); frame(); drawHandles();
+    setScene(); uploadOut(out); frame(); drawHandles();
   }
   function openPlace() {
     readSheet();
     const n = parseInt($('tryNum').value, 10);
-    adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n;
+    adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n; adjMode = cfg.pics[nn(adjOut)] ? 'pic' : 'text';
     $('sheet').hidden = true; reset(); state = 'place'; $('playBtn').hidden = true;
     $('adjust').hidden = false; $('handles').hidden = false; $('adjBody').hidden = false; $('adjFold').textContent = 'Hide controls';
     // Phones only decode frames once a video has played, so start it silently, stop, and go to the last frame.
@@ -735,7 +753,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('adjTime').value = Math.round(1000 * t / (video.duration || 1)); $('adjTimeV').textContent = t.toFixed(1) + ' s';
   }
   $('adjTime').addEventListener('input', () => seekTo(($('adjTime').value / 1000) * (video.duration || 0)));
-  ADJ.forEach(([id, key, k]) => $(id).addEventListener('input', () => { setOwn({ [key]: +$(id).value / k }); placeDraw(); }));
+  ADJ.forEach(a => $(a[0]).addEventListener('input', () => { const key = keyFor(a); if (key) { setOwn({ [key]: +$(a[0]).value / a[3] }); placeDraw(); } }));
+  $('adjMode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { adjMode = b.dataset.m; placeDraw(); } });
   // Masking compares each pixel with the surface itself, so measure the surface on the frame showing now.
   function measureSurface() {
     const pc = document.createElement('canvas'), k = Math.min(1, 320 / scene.w);
@@ -775,7 +794,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const p = toVideo(e.clientX, e.clientY), q = drag.quad.map(v => v.slice());
     if (drag.i === 'move') { const dx = p[0] - drag.start[0], dy = p[1] - drag.start[1]; q.forEach(v => { v[0] += dx; v[1] += dy; }); }
     else q[+drag.i] = p;
-    scene.quad = q; setScene(); uploadOut(adjOut); frame(); drawHandles();
+    scene.quad = q; setScene(); uploadOut(previewOut()); frame(); drawHandles();
   });
   const endDrag = () => { if (drag) { setOwn({ quad: scene.quad }); drag = null; } };
   $('handles').addEventListener('pointerup', endDrag); $('handles').addEventListener('pointercancel', endDrag);
