@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Clips</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Clips">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; height: 100%; }
+body { margin: 0; overscroll-behavior: none; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap">
+<style>
+/* Layout: a full-screen video viewer (top bar, picture, play button, scrubber). Deliberately single dark look. */
+:root {
+  --bg: #000;
+  --fg: #f5f5f7;
+  --dim: #a1a1a6;
+  --panel: #1c1c1e;
+  --line: #38383a;
+  --accent: #0a84ff;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Roboto, Arial, sans-serif;
+  --marker: "Permanent Marker", "Marker Felt", "Comic Sans MS", cursive;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--ui); overflow: hidden;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.viewer { position: fixed; inset: 0; background: var(--bg); }
+.viewer canvas, .viewer img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bar { position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: 12px; pointer-events: none;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.top { top: 0; padding-top: calc(env(safe-area-inset-top, 0px) + 10px); padding-bottom: 28px; background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0)); }
+.bottom { bottom: 0; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); padding-top: 36px; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.55)); flex-direction: column; align-items: stretch; gap: 8px; }
+.back { font-size: 30px; line-height: 1; color: var(--fg); width: 22px; }
+.titles { flex: 1; min-width: 0; text-align: center; padding-right: 22px; }
+.t1 { font-weight: 600; font-size: 16px; }
+.t2 { font-size: 12px; color: var(--dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.scrub { height: 3px; border-radius: 2px; background: rgba(255,255,255,.3); overflow: hidden; }
+.scrub i { display: block; height: 100%; width: 0; background: var(--fg); }
+.times { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.play { position: absolute; left: 50%; top: 50%; width: 72px; height: 72px; margin: -36px 0 0 -36px; border-radius: 50%;
+  background: rgba(30,30,30,.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); pointer-events: none;
+  display: flex; align-items: center; justify-content: center; }
+.play::before { content: ""; margin-left: 6px; border-left: 22px solid var(--fg); border-top: 14px solid transparent; border-bottom: 14px solid transparent; }
+.loading { position: absolute; left: 0; right: 0; top: 50%; text-align: center; color: var(--dim); font-size: 14px; margin-top: 50px; pointer-events: none; }
+
+/* Magician settings */
+.sheet { position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: calc(env(safe-area-inset-top, 0px) + 20px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 28px) max(16px, env(safe-area-inset-left, 0px));
+  user-select: text; -webkit-user-select: text; }
+.sheet-inner { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; font-size: 16px; line-height: 1.45; }
+.sheet h1 { font-size: 26px; margin: 0; }
+.sheet h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 6px; font-weight: 600; }
+.sheet p { margin: 0; color: var(--dim); }
+.sheet ul, .sheet ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.srow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.srow label { flex: 1 1 180px; min-width: 0; }
+.srow small { color: var(--dim); }
+.srow select, .srow input[type=text] { font: 16px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-width: 100%; }
+.srow input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
+textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.6 ui-monospace, Menlo, monospace; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.nums { display: flex; gap: 10px; align-items: flex-start; }
+.nums pre { margin: 0; padding: 11px 0; font: 15px/1.6 ui-monospace, Menlo, monospace; color: var(--dim); text-align: right; }
+.btn { font: 600 15px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+.btn.primary { background: var(--fg); color: #000; border-color: var(--fg); font-size: 17px; padding: 13px; }
+.keypad { display: grid; grid-template-columns: repeat(3, 56px); gap: 4px; }
+.keypad span { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; text-align: center; padding: 8px 0; font-weight: 600; }
+.keypad .zero { grid-column: 1 / span 3; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="viewer" id="viewer">
+  <img id="poster" alt="">
+  <canvas id="cv"></canvas>
+  <div class="bar top">
+    <span class="back">‹</span>
+    <div class="titles"><div class="t1" id="t1">Today</div><div class="t2" id="t2">08:14 · 4.18 MB</div></div>
+  </div>
+  <div class="play" id="playBtn"></div>
+  <div class="loading" id="loading">Loading…</div>
+  <div class="bar bottom">
+    <div class="scrub"><i id="scrubFill"></i></div>
+    <div class="times"><span id="tNow">0:00</span><span id="tEnd">0:08</span></div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-inner">
+    <h1>Magician settings</h1>
+
+    <div>
+      <h2>Secret keypad</h2>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div class="keypad" aria-label="Keypad layout"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span class="zero">0</span></div>
+        <p style="flex:1 1 200px">The whole screen is split into four rows of equal height. The bottom row is all 0. Tap two digits, then the next tap anywhere plays the video.</p>
+      </div>
+    </div>
+
+    <div>
+      <h2>Controls</h2>
+      <ul>
+        <li><b>Tap two digits:</b> sets the out (01 to 99). Nothing visible happens, except the confirmation below.</li>
+        <li><b>Confirmation:</b> the file size under the date changes to <b>4.NN MB</b>, where NN is the out you tapped. 4.07 MB means out 07.</li>
+        <li><b>Next tap, anywhere:</b> plays the video. Hand the phone over and let them press play.</li>
+        <li><b>Swipe left or right:</b> clears the digits and goes back to the start. Use it if you mistype.</li>
+        <li><b>Hold anywhere (1.5 seconds):</b> opens this screen.</li>
+      </ul>
+    </div>
+
+    <div>
+      <h2>Video</h2>
+      <div class="srow"><label for="cfgScene">Scene</label>
+        <select id="cfgScene">
+          <option value="towel">Tea towel lifted off the board</option>
+          <option value="board">Board only</option>
+        </select></div>
+      <div class="srow"><label for="cfgInk">Marker colour</label>
+        <select id="cfgInk">
+          <option value="navy">Dark blue</option>
+          <option value="black">Black</option>
+          <option value="red">Red</option>
+          <option value="green">Green</option>
+        </select></div>
+      <div class="srow"><label for="cfgRed">Red marker for hearts and diamonds</label><input type="checkbox" id="cfgRed"></div>
+      <div class="srow"><label for="cfgPeek">Show the confirmation in the file size</label><input type="checkbox" id="cfgPeek"></div>
+    </div>
+
+    <div>
+      <h2>Outs</h2>
+      <p style="margin-bottom:10px">One per line. Line 01 is out 01, and so on. Use | to start a new line on the board, e.g. <code>Queen|of Hearts</code>. A blank line writes the number itself. Out 00 leaves the board blank.</p>
+      <div class="nums"><pre id="lineNums"></pre><textarea id="cfgOuts" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></div>
+      <div class="srow" style="border-bottom:0"><label>Put the 52 cards back on lines 01 to 52<br><small>Clubs, Hearts, Spades, Diamonds, each Ace to King.</small></label><button class="btn" id="cardsBtn">Reset cards</button></div>
+    </div>
+
+    <div>
+      <h2>Try an out</h2>
+      <div class="srow" style="border-bottom:0"><label for="tryNum">Out number</label>
+        <input id="tryNum" type="text" inputmode="numeric" maxlength="2" style="width:70px" placeholder="07">
+        <button class="btn" id="tryBtn">Play it</button></div>
+    </div>
+
+    <div class="srow" style="border-bottom:0"><label>Version 1</label></div>
+    <button class="btn primary" id="close">Done</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+
+  // Board corners (inner white area) in each video's own pixels: top-left, top-right, bottom-right, bottom-left.
+  const SCENES = {
+    towel: { src: 'towel.mp4', poster: 'towel.jpg', w: 720, h: 1280, quad: [[220, 408], [618, 415], [613, 892], [172, 865]], label: 'Kitchen' },
+    board: { src: 'board.mp4', poster: 'board.jpg', w: 1080, h: 1920, quad: [[327, 618], [967.5, 612], [933, 1347], [273, 1293]], label: 'Kitchen' }
+  };
+  const VALUES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
+  const SUITS = ['Clubs', 'Hearts', 'Spades', 'Diamonds'];
+  const CARDS = SUITS.flatMap(s => VALUES.map(v => v + '|of ' + s));
+
+  // ---- settings ----
+  const DEF = { scene: 'towel', ink: 'navy', red: true, peek: true, outs: CARDS.join('\n') };
+  let cfg = Object.assign({}, DEF);
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
+  const save = () => { try { localStorage.setItem('clips-cfg', JSON.stringify(cfg)); } catch (e) {} };
+  const outText = n => {
+    if (n === 0) return '';
+    const line = (cfg.outs.split('\n')[n - 1] || '').trim();
+    return line || String(n);
+  };
+
+  // ---- maths: homography taking video pixels to board coordinates (0..1) ----
+  function solve(A, b) {
+    const n = b.length;
+    for (let i = 0; i < n; i++) {
+      let p = i; for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
+      [A[i], A[p]] = [A[p], A[i]]; [b[i], b[p]] = [b[p], b[i]];
+      for (let r = i + 1; r < n; r++) { const f = A[r][i] / A[i][i]; for (let c = i; c < n; c++) A[r][c] -= f * A[i][c]; b[r] -= f * b[i]; }
+    }
+    const x = new Array(n);
+    for (let i = n - 1; i >= 0; i--) { let s = b[i]; for (let c = i + 1; c < n; c++) s -= A[i][c] * x[c]; x[i] = s / A[i][i]; }
+    return x;
+  }
+  function homography(from, to) {   // 3x3, row-major, maps from[i] -> to[i]
+    const A = [], b = [];
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = from[i], [u, v] = to[i];
+      A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+      A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+    }
+    return solve(A, b).concat(1);
+  }
+
+  // ---- the board's writing, drawn flat, then mapped onto the board by the shader ----
+  const ink = document.createElement('canvas');
+  function boardAspect(q) {
+    const w = (Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) + Math.hypot(q[2][0] - q[3][0], q[2][1] - q[3][1])) / 2;
+    const h = (Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]) + Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1])) / 2;
+    return { w, h };
+  }
+  function drawInk(text) {
+    const { w, h } = boardAspect(scene.quad);
+    ink.width = Math.round(w); ink.height = Math.round(h);   // about one texel per video pixel, so the writing is as soft as the footage
+    const c = ink.getContext('2d');
+    c.clearRect(0, 0, ink.width, ink.height);
+    const lines = text.split('|').map(s => s.trim()).filter(Boolean);
+    if (!lines.length) return;
+    c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    // Largest size that fits 80% of the width and 70% of the height.
+    let size = ink.height * 0.4;
+    const fits = s => { c.font = s + 'px ' + getComputedStyle(document.body).getPropertyValue('--marker'); return lines.every(l => c.measureText(l).width <= ink.width * 0.8) && lines.length * s * 1.15 <= ink.height * 0.7; };
+    while (size > 8 && !fits(size)) size *= 0.94;
+    c.save();
+    c.translate(ink.width / 2, ink.height / 2); c.rotate(-0.035);
+    const lh = size * 1.15, y0 = -(lines.length - 1) * lh / 2;
+    lines.forEach((l, i) => c.fillText(l, (i % 2 ? 1 : -1) * size * 0.06, y0 + i * lh + (i ? size * 0.04 : 0)));
+    c.restore();
+  }
+  const INK = { navy: [0.13, 0.18, 0.38], black: [0.12, 0.12, 0.13], red: [0.72, 0.13, 0.15], green: [0.12, 0.42, 0.22] };
+  const inkColour = text => (cfg.red && /hearts|diamonds/i.test(text)) ? INK.red : INK[cfg.ink] || INK.navy;
+
+  // ---- WebGL: draw each video frame, adding the writing only where the white board shows ----
+  const cv = $('cv');
+  const gl = cv.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: false });
+  let prog, texV, texI, uH, uSize, uInk, uOn;
+  function shader(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; }
+  function initGL() {
+    prog = gl.createProgram();
+    gl.attachShader(prog, shader(gl.VERTEX_SHADER, 'attribute vec2 p; varying vec2 uv; void main(){ uv = p * 0.5 + 0.5; uv.y = 1.0 - uv.y; gl_Position = vec4(p, 0.0, 1.0); }'));
+    gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, [
+      'precision highp float;',
+      'varying vec2 uv; uniform sampler2D vid; uniform sampler2D txt; uniform mat3 H; uniform vec2 size; uniform vec3 inkC; uniform float on;',
+      'float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
+      'void main(){',
+      '  vec3 c = texture2D(vid, uv).rgb;',
+      '  vec3 b = H * vec3(uv * size, 1.0); vec2 bu = b.xy / b.z;',
+      '  float a = 0.0;',
+      '  if (bu.x > 0.0 && bu.x < 1.0 && bu.y > 0.0 && bu.y < 1.0) a = texture2D(txt, bu).a;',
+      // Only where the pixel is the white board: bright and colourless. A dark towel or a hand in front hides the writing.
+      '  float lum = dot(c, vec3(0.299, 0.587, 0.114));',
+      '  float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));',
+      '  float m = smoothstep(0.55, 0.7, lum) * (1.0 - smoothstep(0.1, 0.22, sat));',
+      '  float streak = 0.82 + 0.18 * hash(floor(bu * vec2(220.0, 40.0)));',   // slightly uneven marker
+      '  a *= m * streak * on * 0.93;',
+      '  gl_FragColor = vec4(mix(c, c * inkC * 1.15, a), 1.0);',
+      '}'].join('\n')));
+    gl.linkProgram(prog); gl.useProgram(prog);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const mk = unit => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+      [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+      [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.LINEAR)); return t; };
+    texV = mk(0); texI = mk(1);
+    gl.uniform1i(gl.getUniformLocation(prog, 'vid'), 0); gl.uniform1i(gl.getUniformLocation(prog, 'txt'), 1);
+    uH = gl.getUniformLocation(prog, 'H'); uSize = gl.getUniformLocation(prog, 'size');
+    uInk = gl.getUniformLocation(prog, 'inkC'); uOn = gl.getUniformLocation(prog, 'on');
+  }
+  function setScene() {
+    cv.width = scene.w; cv.height = scene.h; gl.viewport(0, 0, scene.w, scene.h);
+    const h = homography(scene.quad, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    // GLSL wants column-major.
+    gl.uniformMatrix3fv(uH, false, new Float32Array([h[0], h[3], h[6], h[1], h[4], h[7], h[2], h[5], h[8]]));
+    gl.uniform2f(uSize, scene.w, scene.h);
+  }
+  function uploadInk(text) {
+    drawInk(text);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texI);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ink);
+    gl.uniform3fv(uInk, inkColour(text));
+  }
+
+  // ---- video ----
+  let scene = SCENES[cfg.scene] || SCENES.towel;
+  const video = document.createElement('video');
+  video.playsInline = true; video.setAttribute('playsinline', ''); video.setAttribute('webkit-playsinline', ''); video.preload = 'auto';
+  let ready = false, playing = false;
+  async function loadScene() {
+    scene = SCENES[cfg.scene] || SCENES.towel;
+    ready = false; $('loading').hidden = false;
+    $('poster').src = scene.poster; $('poster').hidden = false; cv.hidden = true;
+    $('t2').textContent = stamp();
+    setScene();
+    try {
+      // Loaded whole into memory, so it plays offline and phones don't need to stream it in parts.
+      const r = await fetch(scene.src); const blob = await r.blob();
+      if (video.src) URL.revokeObjectURL(video.src);
+      video.src = URL.createObjectURL(blob); video.load();
+    } catch (e) { video.src = scene.src; }
+    video.addEventListener('loadedmetadata', () => { $('tEnd').textContent = fmt(video.duration); }, { once: true });
+    ready = true; $('loading').hidden = true;
+  }
+  const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  function frame() {
+    if (video.readyState >= 2) {
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texV);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (cv.hidden) { cv.hidden = false; $('poster').hidden = true; }
+    }
+    const d = video.duration || 8;
+    $('scrubFill').style.width = (100 * video.currentTime / d) + '%';
+    $('tNow').textContent = fmt(video.currentTime);
+    if (playing) requestAnimationFrame(frame);
+  }
+  function play(out) {
+    if (!ready) return;
+    uploadInk(outText(out)); gl.uniform1f(uOn, 1);
+    video.muted = false; video.currentTime = 0;
+    const p = video.play(); if (p && p.catch) p.catch(() => { video.muted = true; video.play().catch(() => {}); });
+    playing = true; $('playBtn').hidden = true; requestAnimationFrame(frame);
+  }
+  video.addEventListener('ended', () => { playing = false; frame(); });
+
+  // ---- the secret keypad ----
+  let digits = '', state = 'idle';   // idle -> armed (two digits) -> played
+  const size0 = '4.' + String(10 + Math.floor(Math.random() * 80));
+  const stamp = () => '08:14 · ' + (cfg.peek && digits.length === 2 ? '4.' + digits : size0) + ' MB';
+  function keyAt(x, y) {
+    const row = Math.min(3, Math.floor(4 * y / innerHeight));
+    if (row === 3) return '0';
+    return String(row * 3 + Math.min(2, Math.floor(3 * x / innerWidth)) + 1);
+  }
+  function reset() {
+    digits = ''; state = 'idle'; playing = false;
+    video.pause(); try { video.currentTime = 0; } catch (e) {}
+    cv.hidden = true; $('poster').hidden = false; $('playBtn').hidden = false;
+    $('scrubFill').style.width = '0'; $('tNow').textContent = '0:00'; $('t2').textContent = stamp();
+  }
+  function onTap(x, y) {
+    if (state === 'idle') {
+      digits += keyAt(x, y);
+      if (digits.length === 2) state = 'armed';
+      $('t2').textContent = stamp();
+    } else if (state === 'armed') {
+      state = 'played'; play(+digits);
+    }
+  }
+  // One handler for taps, swipes and the hold, reading the finger directly.
+  let sx = 0, sy = 0, st = 0, down = false, holdT = null;
+  const viewer = $('viewer');
+  viewer.addEventListener('pointerdown', e => {
+    sx = e.clientX; sy = e.clientY; st = Date.now(); down = true;
+    clearTimeout(holdT); holdT = setTimeout(() => { down = false; openSheet(); }, 1500);
+  });
+  viewer.addEventListener('pointermove', e => { if (down && Math.hypot(e.clientX - sx, e.clientY - sy) > 12) clearTimeout(holdT); });
+  viewer.addEventListener('pointerup', e => {
+    clearTimeout(holdT);
+    if (!down) return; down = false;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { reset(); return; }
+    if (Math.hypot(dx, dy) < 12 && Date.now() - st < 700) onTap(sx, sy);
+  });
+  viewer.addEventListener('pointercancel', () => { clearTimeout(holdT); down = false; });
+  viewer.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ---- settings screen ----
+  function lineNums() {
+    const n = Math.max(99, $('cfgOuts').value.split('\n').length);
+    $('lineNums').textContent = Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, '0')).join('\n');
+  }
+  $('cfgOuts').addEventListener('scroll', () => { $('lineNums').style.transform = 'translateY(' + (-$('cfgOuts').scrollTop) + 'px)'; });
+  function openSheet() {
+    $('cfgScene').value = cfg.scene; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek;
+    $('cfgOuts').value = cfg.outs; lineNums();
+    $('sheet').hidden = false;
+  }
+  function readSheet() {
+    const sceneChanged = cfg.scene !== $('cfgScene').value;
+    cfg.scene = $('cfgScene').value; cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked;
+    cfg.outs = $('cfgOuts').value; save();
+    if (sceneChanged) loadScene();
+  }
+  ['cfgScene', 'cfgInk', 'cfgRed', 'cfgPeek'].forEach(id => $(id).addEventListener('change', readSheet));
+  $('cfgOuts').addEventListener('input', () => { lineNums(); readSheet(); });
+  $('cardsBtn').addEventListener('click', () => {
+    const lines = $('cfgOuts').value.split('\n');
+    for (let i = 0; i < 52; i++) lines[i] = CARDS[i];
+    $('cfgOuts').value = lines.join('\n'); lineNums(); readSheet();
+  });
+  $('tryBtn').addEventListener('click', () => {
+    const n = parseInt($('tryNum').value, 10);
+    if (isNaN(n) || n < 0 || n > 99) { $('tryNum').focus(); return; }
+    $('sheet').hidden = true; reset(); digits = String(n).padStart(2, '0'); state = 'played'; play(n);
+  });
+  $('close').addEventListener('click', () => { readSheet(); $('sheet').hidden = true; reset(); });
+
+  // ---- start ----
+  if (!gl) { $('loading').textContent = 'This phone can’t show the video effect.'; return; }
+  initGL(); loadScene(); reset();
+  // Draw the writing once the marker font has arrived, so the first play never falls back to a plain font.
+  if (document.fonts && document.fonts.load) document.fonts.load('40px "Permanent Marker"').catch(() => {});
+  function wake() { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {} }
+  wake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
