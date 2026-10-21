@@ -263,7 +263,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 16</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 17</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -286,7 +286,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 16, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 17, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -313,7 +313,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   const ESP = ['Circle', 'Cross', 'Wavy|lines', 'Square', 'Star'], ESP_FILES = ['circle', 'cross', 'waves', 'square', 'star'];
   const drawn = (names, files) => Object.fromEntries(names.map((n, i) => [String(i + 1).padStart(2, '0'), { name: n.replace('|', ' ') + ' (drawn)', src: 'sym/' + files[i] + '.png', ink: true }]));
   const list = a => lines(at(1, a));
-  const COMMON = ['Rose', 'Carrot', 'Chair', '7', '37', 'Red', 'Paris', 'Dog', 'Hammer', 'Apple'];
+  const COMMON = ['Rose', 'Carrot', 'Chair', '7', '37', 'Red', 'Paris', 'Dog', 'Hammer', 'Apple',
+    'Cat', 'House', 'Boat', 'Fish', 'Car', 'Tree', 'Smiley face', 'Scribble', 'Rocket', 'Alien', 'UFO', 'Rabbit', 'Stickman', 'Glass', 'Bottle', 'Ball', 'Umbrella'];
+  // The doodle drawn for each common choice (7, 37 and Red stay written).
+  const DOODLES = { 1: 'rose', 2: 'carrot', 3: 'chair', 7: 'eiffel', 8: 'dog', 9: 'hammer', 10: 'apple', 11: 'cat', 12: 'house', 13: 'boat', 14: 'fish', 15: 'car',
+    16: 'tree', 17: 'smiley', 18: 'scribble', 19: 'rocket', 20: 'alien', 21: 'ufo', 22: 'rabbit', 23: 'stickman', 24: 'glass', 25: 'bottle', 26: 'ball', 27: 'umbrella' };
+  const doodlePics = () => Object.fromEntries(Object.entries(DOODLES).map(([n, f]) => [String(n).padStart(2, '0'), { name: (f === 'eiffel' ? 'Eiffel Tower' : COMMON[n - 1]) + ' (doodle)', src: 'doodle/' + f + '.png', ink: true }]));
   const READY = [
     { id: 'colours', name: 'Colours', outs: list(['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Black', 'White', 'Brown', 'Grey', 'Gold']), pics: {} },
     { id: 'days', name: 'Days of the week', outs: list(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']), pics: {} },
@@ -322,8 +327,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     { id: 'signsyms', name: 'Star sign symbols', outs: list(SIGNS), pics: drawn(SIGNS.map(x => x + ' symbol'), SIGNS.map(x => x.toLowerCase())) },
     { id: 'esp', name: 'ESP symbols', outs: list(ESP), pics: drawn(ESP, ESP_FILES) },
     { id: 'forces', name: 'Common choices', outs: list(COMMON), pics: {} },
-    { id: 'doodles', name: 'Common choices (doodles)', outs: list(COMMON), pics: Object.fromEntries([[1, 'rose'], [2, 'carrot'], [3, 'chair'], [7, 'eiffel'], [8, 'dog'], [9, 'hammer'], [10, 'apple']]
-      .map(([n, f]) => [String(n).padStart(2, '0'), { name: (f === 'eiffel' ? 'Eiffel Tower' : f[0].toUpperCase() + f.slice(1)) + ' (doodle)', src: 'doodle/' + f + '.png', ink: true }])) },
+    { id: 'doodles', name: 'Common choices (doodles)', outs: list(COMMON), pics: doodlePics() },
     { id: 'cities', name: 'Cities', outs: list(['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney', 'Barcelona', 'Dubai', 'Las Vegas', 'Amsterdam']), pics: {} }
   ];
   const startSets = (outs, pics) => [
@@ -349,6 +353,14 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const look = cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
     READY.forEach(r => { if (!cfg.sets.some(x => x.id === r.id)) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: JSON.parse(JSON.stringify(look.place || {})) }, Object.fromEntries(STYLE.map(k => [k, look[k] ?? cfg[k]])))); });
     cfg.v = 16;
+  }
+  if (cfg.v < 17) {   // version 17: more common choices; fill empty boxes only, so your own edits stay
+    cfg.sets.forEach(x => {
+      if (x.id !== 'forces' && x.id !== 'doodles') return;
+      const a = x.outs.split('\n'); COMMON.forEach((v, i) => { if (!(a[i] || '').trim()) a[i] = v; }); x.outs = a.join('\n');
+      if (x.id === 'doodles') Object.entries(doodlePics()).forEach(([k, v]) => { if (!x.pics[k]) x.pics[k] = v; });
+    });
+    cfg.v = 17;
   }
   cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
   const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
