@@ -1,4 +1,4 @@
-const CACHE = 'clips-v12';
+const CACHE = 'clips-v13';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'cloth.mp4', 'cloth.jpg', 'towel.mp4', 'towel.jpg', 'board.mp4', 'board.jpg', 'card-7h.png', 'station.mp4', 'station.jpg', 'station-track.json'].concat(['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces', 'circle', 'cross', 'waves', 'square', 'star'].map(n => 'sym/' + n + '.png')).concat(['rose', 'carrot', 'chair', 'eiffel', 'dog', 'hammer', 'apple', 'cat', 'house', 'boat', 'fish', 'car', 'tree', 'smiley', 'scribble', 'rocket', 'alien', 'ufo', 'rabbit', 'stickman', 'glass', 'bottle', 'ball', 'umbrella'].map(n => 'doodle/' + n + '.png'));
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
