@@ -233,7 +233,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         </select></div>
       <div class="srow"><label for="cfgTimeIn">Entering a time<br><small>For the station clock.</small></label>
         <select id="cfgTimeIn">
-          <option value="clock">Clock face: hour, then minutes in fives</option>
+          <option value="clock">12 boxes: hour, then minutes in fives</option>
           <option value="digits">Four digits on the keypad (exact minutes)</option>
         </select></div>
       <div class="srow"><label for="cfgResume">After the last digit</label>
@@ -269,7 +269,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 20</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 21</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -762,12 +762,13 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   }
   const need = () => set().kind === 'time' ? 4 : 2;
   const clockFace = () => set().kind === 'time' && cfg.timeIn === 'clock';
-  // Clock-face input: the direction of a tap from the middle of the screen, read like a clock: 12 straight up, 3 to the right.
+  // Time input: the keypad grid with its bottom row split in three, so the screen is twelve boxes numbered 1 to 12
+  // (1 2 3 / 4 5 6 / 7 8 9 / 10 11 12).
   function clockAt(x, y) {
-    const a = Math.atan2(x - innerWidth / 2, innerHeight / 2 - y);   // 0 at 12 o'clock, clockwise
-    return ((Math.round(a / (Math.PI / 6)) % 12) + 12) % 12 || 12;
+    const row = Math.min(3, Math.floor(4 * y / innerHeight)), col = Math.min(2, Math.floor(3 * x / innerWidth));
+    return row * 3 + col + 1;
   }
-  // What one tap adds: a keypad digit, or on the clock face the hour (first tap) or minutes in fives (second tap).
+  // What one tap adds: a keypad digit, or for a time the hour (first tap) or minutes in fives (second tap).
   function entryAt(x, y) {
     if (!clockFace()) return keyAt(x, y);
     const n = clockAt(x, y);
@@ -845,7 +846,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     if (set().kind === 'time') {
       const p = document.createElement('p');
       p.innerHTML = cfg.timeIn === 'clock'
-        ? 'This effect predicts a <b>time</b>, so there are no boxes to fill. The screen is an invisible <b>clock face</b>: tap in the direction of a number from the middle of the screen, 12 straight up, 3 to the right, 6 straight down. <b>First tap: the hour. Second tap: the minutes, in fives</b> (tap the 9 for 45, the 4 for 20, the 12 for o\u2019clock). With play, pause, play: play, pause on the hour, play on the minutes. For 7:45: pause towards the 7, play towards the 9. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.'
+        ? 'This effect predicts a <b>time</b>, so there are no boxes to fill. The screen is <b>12 invisible boxes</b>: the usual keypad rows 1 2 3 / 4 5 6 / 7 8 9, with the bottom row split into <b>10 11 12</b>. <b>First tap: the hour. Second tap: the minutes in fives, read like a clock face</b> (box 9 for 45, box 4 for 20, box 12 for o\u2019clock). With play, pause, play: play, pause on the hour, play on the minutes. For 7:45: pause on box 7, play on box 9. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.'
         : 'This effect predicts a <b>time</b>, so there are no boxes to fill. Tap four digits on the keypad, hours then minutes: <b>0745</b> is 7:45, <b>1120</b> is 11:20. With play, pause, play that is pause, play, pause, play. The file size shows the time once all four are in, e.g. <b>07.45 MB</b>. Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.';
       list.appendChild(p); return;
     }
