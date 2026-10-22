@@ -273,7 +273,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 23</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 24</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -712,6 +712,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
       const t = video.currentTime, q = trackedQuad(t);
       let bv = [0, 0];
+      // The clean-up patch belongs on the clock face: off until the tracked surface is in view, or it paints over the platform.
+      if (scene.patch) gl.uniform1f(U.usePatch, q ? 1 : 0);
       if (scene.trackData && q) {
         setQuad(q);
         // How far the surface moved since the previous frame, in surface units: the blur for this frame.
