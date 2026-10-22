@@ -190,6 +190,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <li><b>Do the pause before the reveal.</b> If the writing would already be showing when you pause, choose “Start again from the beginning” below, so nobody sees it appear.</li>
         <li><b>Digits first</b> (the other way): tap two digits on the still picture, then the next tap anywhere plays.</li>
         <li><b>Confirmation:</b> once both digits are in, the file size under the date changes to <b>4.NN MB</b>, where NN is the out. 4.07 MB means out 07.</li>
+        <li><b>Swipe down:</b> take back the last tap only, if you hit the wrong place.</li>
         <li><b>Swipe left or right:</b> clears the digits and goes back to the start. Use it if you mistype.</li>
         <li><b>Hold anywhere (1.5 seconds):</b> opens this screen.</li>
       </ul>
@@ -230,7 +231,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
           <option value="pause">Play, pause, play</option>
           <option value="first">Digits first, then play</option>
         </select></div>
-      <div class="srow"><label for="cfgResume">After the second digit</label>
+      <div class="srow"><label for="cfgTimeIn">Entering a time<br><small>For the station clock.</small></label>
+        <select id="cfgTimeIn">
+          <option value="clock">Clock face: hour, then minutes in fives</option>
+          <option value="digits">Four digits on the keypad (exact minutes)</option>
+        </select></div>
+      <div class="srow"><label for="cfgResume">After the last digit</label>
         <select id="cfgResume">
           <option value="carry">Carry on from the pause</option>
           <option value="start">Start again from the beginning</option>
@@ -263,7 +269,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 19</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 20</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -290,7 +296,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 18, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 18, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -736,7 +742,13 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- the secret keypad ----
   let digits = '', state = 'idle';   // idle -> armed (two digits) -> played
   const size0 = '4.' + String(10 + Math.floor(Math.random() * 80));
-  const stamp = () => '08:14 · ' + (!cfg.peek || digits.length !== need() ? size0 : need() === 4 ? digits.slice(0, 2) + '.' + digits.slice(2) : '4.' + digits) + ' MB';
+  // The file size confirms what's been tapped so far: 4.07 MB is out 07, 07.45 MB is 7:45. Part-way, the digits so far
+  // replace the start of the usual number, so after the hour of 7:45 it reads 07.37 MB.
+  function stamp() {
+    if (!cfg.peek || !digits) return '08:14 · ' + size0 + ' MB';
+    const fill = size0.slice(2).repeat(2), d = digits + fill.slice(digits.length);
+    return '08:14 · ' + (need() === 4 ? d.slice(0, 2) + '.' + d.slice(2, 4) : '4.' + d.slice(0, 2)) + ' MB';
+  }
   function keyAt(x, y) {
     const row = Math.min(3, Math.floor(4 * y / innerHeight));
     if (row === 3) return '0';
@@ -749,6 +761,26 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('scrubFill').style.width = '0'; $('tNow').textContent = '0:00'; $('t2').textContent = stamp();
   }
   const need = () => set().kind === 'time' ? 4 : 2;
+  const clockFace = () => set().kind === 'time' && cfg.timeIn === 'clock';
+  // Clock-face input: the direction of a tap from the middle of the screen, read like a clock: 12 straight up, 3 to the right.
+  function clockAt(x, y) {
+    const a = Math.atan2(x - innerWidth / 2, innerHeight / 2 - y);   // 0 at 12 o'clock, clockwise
+    return ((Math.round(a / (Math.PI / 6)) % 12) + 12) % 12 || 12;
+  }
+  // What one tap adds: a keypad digit, or on the clock face the hour (first tap) or minutes in fives (second tap).
+  function entryAt(x, y) {
+    if (!clockFace()) return keyAt(x, y);
+    const n = clockAt(x, y);
+    return digits.length === 0 ? nn(n) : nn((n % 12) * 5);
+  }
+  const step = () => clockFace() ? 2 : 1;
+  // Swipe down: take back the last tap only.
+  function undo() {
+    if (!digits || state === 'played') return;
+    digits = digits.slice(0, -step()); if (state === 'armed') state = 'idle';
+    $('t2').textContent = stamp(); buzz(20);
+  }
+  const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
   // All digits in: set the out and play. If the writing would already be showing, start again from the beginning
   // so nobody sees it appear.
   function finish() {
@@ -761,16 +793,16 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       // Play, pause, play: tap 1 plays (anywhere); each pause and each play after it is a digit.
       // Two digits: pause, play. Four (a time): pause, play, pause, play.
       if (state === 'idle') { state = 'running'; play(null); }
-      else if (state === 'running') { pause(); digits += keyAt(x, y); state = 'paused'; }
+      else if (state === 'running') { pause(); digits += entryAt(x, y); state = 'paused'; $('t2').textContent = stamp(); if (digits.length >= need()) finish(); }
       else if (state === 'paused') {
-        digits += keyAt(x, y);
-        if (digits.length >= need()) finish(); else { state = 'running'; play(null, false); }
+        digits += entryAt(x, y);
+        if (digits.length >= need()) finish(); else { $('t2').textContent = stamp(); state = 'running'; play(null, false); }
       }
       return;
     }
     // Digits first: tap the digits, then the next tap plays.
     if (state === 'idle') {
-      digits += keyAt(x, y);
+      digits += entryAt(x, y);
       if (digits.length === need()) state = 'armed';
       $('t2').textContent = stamp();
     } else if (state === 'armed') {
@@ -791,6 +823,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     if (!down) return; down = false;
     const dx = e.clientX - sx, dy = e.clientY - sy;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { reset(); return; }
+    if (dy > 60 && dy > Math.abs(dx) * 1.5) { undo(); return; }
     if (Math.hypot(dx, dy) < 12 && Date.now() - st < 700) onTap(sx, sy);
   });
   viewer.addEventListener('pointercancel', () => { clearTimeout(holdT); down = false; });
@@ -811,7 +844,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('cardsBtn').parentElement.hidden = set().kind === 'time';
     if (set().kind === 'time') {
       const p = document.createElement('p');
-      p.innerHTML = 'This effect predicts a <b>time</b>, so there are no boxes to fill. Tap four digits, hours then minutes: <b>0745</b> is 7:45, <b>1120</b> is 11:20. With play, pause, play that is pause, play, pause, play. Once all four are in, the file size shows the time, e.g. <b>07.45 MB</b>. Use it with the station clock video, which draws the hands; on any other video the time is written instead.';
+      p.innerHTML = cfg.timeIn === 'clock'
+        ? 'This effect predicts a <b>time</b>, so there are no boxes to fill. The screen is an invisible <b>clock face</b>: tap in the direction of a number from the middle of the screen, 12 straight up, 3 to the right, 6 straight down. <b>First tap: the hour. Second tap: the minutes, in fives</b> (tap the 9 for 45, the 4 for 20, the 12 for o\u2019clock). With play, pause, play: play, pause on the hour, play on the minutes. For 7:45: pause towards the 7, play towards the 9. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.'
+        : 'This effect predicts a <b>time</b>, so there are no boxes to fill. Tap four digits on the keypad, hours then minutes: <b>0745</b> is 7:45, <b>1120</b> is 11:20. With play, pause, play that is pause, play, pause, play. The file size shows the time once all four are in, e.g. <b>07.45 MB</b>. Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.';
       list.appendChild(p); return;
     }
     for (let i = 1; i <= 99; i++) {
@@ -895,18 +930,19 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     useSet(cfg.sets[0].id);
   });
   function openSheet() {
-    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgResume').value = cfg.resume;
+    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgTimeIn').value = cfg.timeIn; $('cfgResume').value = cfg.resume;
     fillSets(); buildOuts();
     $('sheet').hidden = false;
   }
   function readSheet() {
     const sceneChanged = cfg.scene !== $('cfgScene').value;
-    cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked; cfg.entry = $('cfgEntry').value; cfg.resume = $('cfgResume').value;
+    cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked; cfg.entry = $('cfgEntry').value; cfg.timeIn = $('cfgTimeIn').value; cfg.resume = $('cfgResume').value;
     STYLE.forEach(k => { set()[k] = cfg[k]; });
     set().outs = readOuts(); save();
     if (sceneChanged) { loadScene(); $('delRow').hidden = !!SCENES[cfg.scene]; }
   }
-  ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek', 'cfgEntry', 'cfgResume'].forEach(id => $(id).addEventListener('change', readSheet));
+  ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek', 'cfgEntry', 'cfgTimeIn', 'cfgResume'].forEach(id => $(id).addEventListener('change', readSheet));
+  $('cfgTimeIn').addEventListener('change', () => buildOuts());
   $('cardsBtn').addEventListener('click', () => {
     for (let i = 0; i < 52; i++) { const el = $('out' + nn(i + 1)); if (el.disabled) el.dataset.text = CARDS[i]; else el.value = CARDS[i]; }
     readSheet();
