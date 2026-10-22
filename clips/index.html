@@ -178,6 +178,30 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     </div>
 
     <div>
+      <h2>Recording time</h2>
+      <p style="margin-bottom:6px">Shown at the top of the video, so the prediction looks recorded before the show.</p>
+      <div class="srow"><label for="cfgRecDay">Day</label>
+        <select id="cfgRecDay">
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="days2">Two days ago</option>
+          <option value="date">A date I choose</option>
+        </select>
+        <input type="date" id="cfgRecDate" hidden></div>
+      <div class="srow"><label for="cfgRecMode">Time<br><small>“Before now” changes by itself, so it's right whenever you perform.</small></label>
+        <select id="cfgRecMode">
+          <option value="fixed">A time I choose</option>
+          <option value="1">1 hour before now</option>
+          <option value="2">2 hours before now</option>
+          <option value="3">3 hours before now</option>
+          <option value="5">5 hours before now</option>
+          <option value="8">8 hours before now</option>
+        </select>
+        <input type="time" id="cfgRecTime"></div>
+      <p class="note" id="recPreview"></p>
+    </div>
+
+    <div>
       <h2>Secret keypad</h2>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <div class="keypad" aria-label="Keypad layout"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span class="zero">0</span></div>
@@ -274,7 +298,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 26</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 27</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -301,7 +325,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 25, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { recDay: 'today', recMode: 'fixed', recTime: '08:14', recDate: '', entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 25, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -751,6 +775,29 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- the secret keypad ----
   let digits = '', state = 'idle';   // idle -> armed (two digits) -> played
   const size0 = '4.' + String(10 + Math.floor(Math.random() * 80));
+  // The recording date and time at the top: a day (today, yesterday, two days ago or a chosen date) and a time
+  // (a chosen time, or so many hours before now). Labelled the way phone galleries do: Today, Yesterday, a weekday
+  // within the last week, otherwise the date.
+  function recWhen() {
+    const now = new Date(), dayBack = { today: 0, yesterday: 1, days2: 2 }[cfg.recDay];
+    let d;
+    if (cfg.recMode !== 'fixed') d = new Date(now.getTime() - +cfg.recMode * 3600e3);
+    else { const [h, m] = (cfg.recTime || '08:14').split(':').map(Number); d = new Date(now); d.setHours(h || 0, m || 0, 0, 0); }
+    if (cfg.recDay === 'date' && cfg.recDate) { const [y, mo, da] = cfg.recDate.split('-').map(Number); d.setFullYear(y, mo - 1, da); }
+    else if (dayBack) d.setDate(d.getDate() - dayBack);
+    const midnight = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const days = Math.round((midnight(now) - midnight(d)) / 864e5);
+    const day = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : days > 1 && days < 7 ? d.toLocaleDateString('en-GB', { weekday: 'long' })
+      : d.toLocaleDateString('en-GB', d.getFullYear() === now.getFullYear() ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' });
+    return { day, time: String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') };
+  }
+  function showRec() {
+    const r = recWhen(), t1 = $('t1'); t1.textContent = r.day + ' ';
+    const sp = document.createElement('span'); sp.className = 'when'; sp.textContent = r.time; t1.appendChild(sp);
+    if ($('recPreview')) $('recPreview').textContent = 'Shows as: ' + r.day + ' ' + r.time;
+  }
+  setInterval(() => { if (state !== 'played' || video.paused) showRec(); }, 30000);   // "hours before now" keeps up with the clock
+
   // The file size confirms what's been tapped so far: 4.07 MB is out 07, 07.45 MB is 7:45. Part-way, the digits so far
   // replace the start of the usual number, so after the hour of 7:45 it reads 07.37 MB.
   function stamp() {
@@ -964,7 +1011,19 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     Object.entries(gone.pics).forEach(([k, p]) => { const key = p.key || 'pic:' + k; if (!p.src && !inUse(key)) idb('readwrite', st => st.delete(key)).catch(() => {}); });
     useSet(cfg.sets[0].id);
   });
+  function recFields() {
+    $('cfgRecDay').value = cfg.recDay; $('cfgRecMode').value = cfg.recMode; $('cfgRecTime').value = cfg.recTime; $('cfgRecDate').value = cfg.recDate;
+    $('cfgRecDate').hidden = cfg.recDay !== 'date'; $('cfgRecTime').hidden = cfg.recMode !== 'fixed';
+    if (cfg.recDay === 'date' && !cfg.recDate) $('cfgRecDate').value = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    showRec();
+  }
+  ['cfgRecDay', 'cfgRecMode', 'cfgRecTime', 'cfgRecDate'].forEach(id => $(id).addEventListener('change', () => {
+    cfg.recDay = $('cfgRecDay').value; cfg.recMode = $('cfgRecMode').value; cfg.recTime = $('cfgRecTime').value || '08:14';
+    if (cfg.recDay === 'date' && !$('cfgRecDate').value) $('cfgRecDate').value = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    cfg.recDate = $('cfgRecDate').value; save(); recFields();
+  }));
   function openSheet() {
+    recFields();
     fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgTimeIn').value = cfg.timeIn; $('cfgResume').value = cfg.resume;
     fillSets(); buildOuts();
     $('sheet').hidden = false;
@@ -1135,7 +1194,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 
   // ---- start ----
   if (!gl) { $('loading').textContent = 'This phone can’t show the video effect.'; return; }
-  initGL(); fillScenes(); loadScene(); reset();
+  initGL(); fillScenes(); loadScene(); reset(); showRec();
   Object.keys(set().pics).forEach(loadPic);
   // Draw the writing once the marker font has arrived, so the first play never falls back to a plain font.
   function loadFont() { if (document.fonts && document.fonts.load) document.fonts.load(fontOf(40)).catch(() => {}); }
