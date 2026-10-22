@@ -263,7 +263,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 17</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 18</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -275,9 +275,13 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // Built-in videos. quad is the writing surface (the board's inner white area) in the video's own pixels:
   // top-left, top-right, bottom-right, bottom-left.
   const SCENES = {
-    cloth: { name: 'Black cloth lifted off a whiteboard', src: 'cloth.mp4', poster: 'cloth.jpg', w: 1080, h: 1920, quad: [[315, 615], [952.5, 603], [922.5, 1342.5], [237, 1287]] },
-    towel: { name: 'Grey tea towel lifted off a whiteboard', src: 'towel.mp4', poster: 'towel.jpg', w: 720, h: 1280, quad: [[220, 408], [618, 415], [613, 892], [172, 865]] },
-    board: { name: 'Whiteboard only', src: 'board.mp4', poster: 'board.jpg', w: 1080, h: 1920, quad: [[327, 618], [967.5, 612], [933, 1347], [273, 1293]] }
+    cloth: { name: 'Black cloth lifted off a whiteboard', src: 'cloth.mp4', poster: 'cloth.jpg', w: 1080, h: 1920, quad: [[315, 615], [952.5, 603], [922.5, 1342.5], [237, 1287]], reveal: 2.0 },
+    towel: { name: 'Grey tea towel lifted off a whiteboard', src: 'towel.mp4', poster: 'towel.jpg', w: 720, h: 1280, quad: [[220, 408], [618, 415], [613, 892], [172, 865]], reveal: 1.9 },
+    board: { name: 'Whiteboard only', src: 'board.mp4', poster: 'board.jpg', w: 1080, h: 1920, quad: [[327, 618], [967.5, 612], [933, 1347], [273, 1293]], reveal: 0 },
+    // The camera tilts up to a station clock with no hands. The face is tracked frame by frame (station-track.json), and the
+    // app draws the hands. patch hides a smudge the AI left on the face, in face coordinates (left, top, right, bottom).
+    station: { name: 'Station clock (camera tilts up)', src: 'station.mp4', poster: 'station.jpg', w: 1080, h: 1920, quad: [[158.0, 457.0], [918.0, 457.0], [918.0, 1153.0], [158.0, 1153.0]],
+      clock: true, track: 'station-track.json', reveal: 3.3, patch: [0.38, 0.57, 0.63, 0.77], ref: [0.86, 0.05] }
   };
   const VALUES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
   const SUITS = ['Clubs', 'Hearts', 'Spades', 'Diamonds'];
@@ -286,7 +290,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 17, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 18, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -328,6 +332,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     { id: 'esp', name: 'ESP symbols', outs: list(ESP), pics: drawn(ESP, ESP_FILES) },
     { id: 'forces', name: 'Common choices', outs: list(COMMON), pics: {} },
     { id: 'doodles', name: 'Common choices (doodles)', outs: list(COMMON), pics: doodlePics() },
+    { id: 'clock', name: 'Station clock (time)', kind: 'time', outs: '', pics: {}, scene: 'station' },
     { id: 'cities', name: 'Cities', outs: list(['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney', 'Barcelona', 'Dubai', 'Las Vegas', 'Amsterdam']), pics: {} }
   ];
   const startSets = (outs, pics) => [
@@ -351,8 +356,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   }
   if (cfg.v < 16) {   // versions 15-16: separate ready-made effects, added after any you already have
     const look = cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
-    READY.forEach(r => { if (!cfg.sets.some(x => x.id === r.id)) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: JSON.parse(JSON.stringify(look.place || {})) }, Object.fromEntries(STYLE.map(k => [k, look[k] ?? cfg[k]])))); });
+    READY.forEach(r => { if (!cfg.sets.some(x => x.id === r.id)) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: JSON.parse(JSON.stringify(look.place || {})) }, Object.fromEntries(STYLE.map(k => [k, r[k] ?? look[k] ?? cfg[k]])))); });
     cfg.v = 16;
+  }
+  if (cfg.v < 18) {   // version 18: the station clock effect
+    const look = cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0], r = READY.find(x => x.id === 'clock');
+    if (!cfg.sets.some(x => x.id === 'clock')) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: {} }, Object.fromEntries(STYLE.map(k => [k, r[k] ?? look[k] ?? cfg[k]]))));
   }
   if (cfg.v < 17) {   // version 17: more common choices; fill empty boxes only, so your own edits stay
     cfg.sets.forEach(x => {
@@ -362,6 +371,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     });
     cfg.v = 17;
   }
+  cfg.v = Math.max(cfg.v, 18);
   cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
   const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
   STYLE.forEach(k => { cfg[k] = set()[k]; });
@@ -382,12 +392,17 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   });
   const upload = id => cfg.uploads.find(u => u.id === id);
   function defaultQuad(w, h) { return [[w * 0.2, h * 0.3], [w * 0.8, h * 0.3], [w * 0.8, h * 0.46], [w * 0.2, h * 0.46]]; }
+  const trackCache = {};   // tracking data for videos with a moving camera, by file
   function sceneOf(id) {
     const b = SCENES[id] || upload(id) || SCENES.cloth, key = SCENES[id] || upload(id) ? id : 'cloth';
     const own = cfg.scenes[key] || (cfg.scenes[key] = {});
-    const base = { quad: b.quad || defaultQuad(b.w, b.h), mask: !!SCENES[key], ref: [0.82, 0.03] };
+    const base = { quad: b.quad || defaultQuad(b.w, b.h), mask: !!SCENES[key] && !b.clock, ref: b.ref || [0.82, 0.03] };
     const eff = set().place[key] || (set().place[key] = {});
-    return Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster }, base, PLACE, own, eff, { own, eff });
+    const sc = Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster, clock: !!b.clock, trackSrc: b.track, trackData: b.track && trackCache[b.track], patch: b.patch },
+      base, PLACE, own, eff, { own, eff });
+    // When the writing first becomes visible, so a late final digit restarts the video instead of the writing popping in.
+    sc.reveal = b.reveal !== undefined ? b.reveal : (sc.from > 0 ? sc.from : null);
+    return sc;
   }
 
   // ---- maths: homography taking video pixels to surface coordinates (0..1), and back ----
@@ -480,15 +495,34 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       'precision highp float;',
       'varying vec2 uv; uniform sampler2D vid; uniform sampler2D txt; uniform mat3 H; uniform vec2 size; uniform vec3 inkC;',
       'uniform float on; uniform float tm; uniform float useMask; uniform vec2 ref; uniform float light; uniform float mode;',
+      'uniform mat3 Hf; uniform vec4 patchR; uniform float usePatch; uniform vec2 blurV;',
       'float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
       'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
       '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }',
+      'vec3 at(vec2 p){ vec3 q = Hf * vec3(p, 1.0); return texture2D(vid, (q.xy / q.z) / size).rgb; }',
       'void main(){',
       '  vec3 c = texture2D(vid, uv).rgb;',
       '  vec3 b = H * vec3(uv * size, 1.0); vec2 bu = b.xy / b.z;',
+      // Paint over a blemish on the surface with the clean surface either side of it, blended in at the edges.
+      '  if (usePatch > 0.5 && b.z > 0.0) {',
+      '    float e = 0.03;',
+      '    float w = smoothstep(patchR.x, patchR.x + e, bu.x) * (1.0 - smoothstep(patchR.z - e, patchR.z, bu.x)) * smoothstep(patchR.y, patchR.y + e, bu.y) * (1.0 - smoothstep(patchR.w - e, patchR.w, bu.y));',
+      '    if (w > 0.0) {',
+      '      float k = clamp((bu.x - patchR.x) / (patchR.z - patchR.x), 0.0, 1.0);',
+      '      vec3 L = max(max(at(vec2(patchR.x - 0.05, bu.y)), at(vec2(patchR.x - 0.05, bu.y - 0.04))), max(at(vec2(patchR.x - 0.08, bu.y + 0.03)), at(vec2(patchR.x - 0.03, bu.y - 0.08))));',
+      '      vec3 R = max(max(at(vec2(patchR.z + 0.05, bu.y)), at(vec2(patchR.z + 0.05, bu.y - 0.04))), max(at(vec2(patchR.z + 0.08, bu.y + 0.03)), at(vec2(patchR.z + 0.03, bu.y - 0.08))));',
+      '      vec3 fill = mix(L, R, k) + (hash(floor(uv * size)) - 0.5) * 0.012;',
+      '      c = mix(c, fill, w);',
+      '    }',
+      '  }',
       '  float a = 0.0;',
       '  vec4 im = vec4(0.0);',
-      '  if (b.z > 0.0 && bu.x > 0.0 && bu.x < 1.0 && bu.y > 0.0 && bu.y < 1.0) { im = texture2D(txt, bu); a = im.a; }',
+      '  if (b.z > 0.0 && bu.x > -0.2 && bu.x < 1.2 && bu.y > -0.2 && bu.y < 1.2) {',
+      // Smear along the camera's movement so a picture blurs exactly like the footage while the camera moves.
+      '    for (int i = 0; i < 7; i++) { vec2 s = clamp(bu + blurV * (float(i) / 6.0 - 0.5), 0.0, 1.0); im += texture2D(txt, s) / 7.0; }',
+      '    if (bu.x < 0.0 || bu.x > 1.0 || bu.y < 0.0 || bu.y > 1.0) im *= 0.0;',
+      '    a = im.a; if (a > 0.0) im.rgb /= a;',
+      '  }',
       '  float lum = dot(c, vec3(0.299, 0.587, 0.114));',
       '  float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));',
       // Optional mask: only where the pixel looks like the surface (about as bright, no more colourful), so a cover or a hand hides the writing.
@@ -515,17 +549,62 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.LINEAR)); return t; };
     texV = mk(0); texI = mk(1);
     gl.uniform1i(gl.getUniformLocation(prog, 'vid'), 0); gl.uniform1i(gl.getUniformLocation(prog, 'txt'), 1);
-    ['H', 'size', 'inkC', 'on', 'tm', 'useMask', 'ref', 'light', 'mode'].forEach(n => { U[n] = gl.getUniformLocation(prog, n); });
+    ['H', 'size', 'inkC', 'on', 'tm', 'useMask', 'ref', 'light', 'mode', 'Hf', 'patchR', 'usePatch', 'blurV'].forEach(n => { U[n] = gl.getUniformLocation(prog, n); });
   }
   function setScene() {
     if (cv.width !== scene.w || cv.height !== scene.h) { cv.width = scene.w; cv.height = scene.h; }
     gl.viewport(0, 0, scene.w, scene.h);
-    const h = homography(scene.quad, UNIT);
-    // GLSL wants column-major.
-    gl.uniformMatrix3fv(U.H, false, new Float32Array([h[0], h[3], h[6], h[1], h[4], h[7], h[2], h[5], h[8]]));
+    setQuad(scene.quad);
     gl.uniform2f(U.size, scene.w, scene.h);
+    gl.uniform1f(U.usePatch, scene.patch ? 1 : 0); if (scene.patch) gl.uniform4fv(U.patchR, scene.patch);
     gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
   }
+  function setQuad(q) {
+    const h = homography(q, UNIT), f = homography(UNIT, q);
+    // GLSL wants column-major.
+    const cm = m => new Float32Array([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
+    gl.uniformMatrix3fv(U.H, false, cm(h)); gl.uniformMatrix3fv(U.Hf, false, cm(f));
+  }
+  // For a moving camera: the surface's corners at video time t from the tracking data, or null before it comes into view.
+  function trackedQuad(t) {
+    const tr = scene.trackData; if (!tr) return scene.quad;
+    const i = Math.round(t * tr.fps) - tr.first;
+    if (i < 0) return null;
+    const q = tr.quads[Math.min(i, tr.quads.length - 1)];
+    return [[q[0], q[1]], [q[2], q[3]], [q[4], q[5]], [q[6], q[7]]];
+  }
+
+  // ---- clock hands: a railway clock's hands drawn flat on the face, then mapped onto it like a picture ----
+  let clockTime = null, clockSec0 = 0, clockSecShown = -1;
+  function drawClock(h, m, sec) {
+    ink.width = ink.height = 512;
+    const c = ink.getContext('2d'), R = 256; c.clearRect(0, 0, 512, 512);
+    c.save(); c.translate(R, R);
+    c.shadowColor = 'rgba(0,0,0,0.3)'; c.shadowBlur = 7; c.shadowOffsetX = 4; c.shadowOffsetY = 7;
+    const hand = (ang, len, tail, w0, w1, col) => {
+      c.save(); c.rotate(ang); c.beginPath();
+      c.moveTo(-w0 / 2, tail); c.lineTo(-w1 / 2, -len); c.lineTo(w1 / 2, -len); c.lineTo(w0 / 2, tail); c.closePath();
+      c.fillStyle = col; c.fill(); c.restore();
+    };
+    hand(((h % 12) + m / 60) * Math.PI / 6, R * 0.52, R * 0.12, R * 0.075, R * 0.05, '#141414');
+    hand((m + sec / 60) * Math.PI / 30, R * 0.8, R * 0.15, R * 0.055, R * 0.028, '#141414');
+    hand(sec * Math.PI / 30, R * 0.84, R * 0.24, R * 0.02, R * 0.012, '#b3141a');
+    c.beginPath(); c.arc(0, 0, R * 0.05, 0, 7); c.fillStyle = '#141414'; c.fill();
+    c.shadowColor = 'transparent'; c.beginPath(); c.arc(0, 0, R * 0.018, 0, 7); c.fillStyle = '#b3141a'; c.fill();
+    c.restore();
+  }
+  // The second hand ticks once a second from a random starting second, so it looks live.
+  function clockSecond(t) { return (clockSec0 + Math.floor(t)) % 60; }
+  function uploadClock(t) {
+    const s = clockSecond(t); clockSecShown = s;
+    drawClock(clockTime.h, clockTime.m, s);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texI);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ink);
+    gl.uniform1f(U.mode, 1);
+  }
+  // A time from the digits tapped: 0745 or 745 is 7:45.
+  const timeOf = n => ({ h: Math.floor(n / 100) % 24, m: Math.min(59, n % 100) });
+
   // ---- picture outs: an image placed on the surface instead of writing ----
   const picImgs = {};   // '60' -> loaded image
   const nn = n => String(n).padStart(2, '0');
@@ -561,6 +640,16 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   const isDrawing = k => !!(set().pics[k] && set().pics[k].ink);
   // Draws out n (or nothing, for null) and hands it to the shader.
   function uploadOut(n) {
+    clockTime = null;
+    if (n !== null && set().kind === 'time') {
+      const t = timeOf(n);
+      if (scene.clock) { clockTime = t; clockSec0 = 5 + Math.floor(Math.random() * 40); uploadClock(video.currentTime); return; }
+      n = null; drawInk(t.h + ':' + String(t.m).padStart(2, '0'));   // on any other video, write the time
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texI);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ink);
+      gl.uniform1f(U.mode, 0); gl.uniform3fv(U.inkC, INK[cfg.ink] || INK.black); gl.uniform1f(U.light, cfg.ink === 'white' ? 1 : 0);
+      return;
+    }
     const k = n === null ? '' : nn(n), img = k && set().pics[k] && picImgs[k], drawing = img && isDrawing(k), pic = img && !drawing;
     const text = n === null || img ? '' : outText(n);
     if (pic) drawPic(img); else if (drawing) drawInkPic(img); else drawInk(text);
@@ -594,6 +683,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         if (!rec) throw new Error('missing');
         vblob = rec.video; poster = URL.createObjectURL(rec.poster); urls.push(poster);
       }
+      if (scene.trackSrc) scene.trackData = trackCache[scene.trackSrc] || (trackCache[scene.trackSrc] = await (await fetch(scene.trackSrc)).json());
       const vu = URL.createObjectURL(vblob); urls.push(vu);
       $('poster').src = poster; $('poster').hidden = false;
       video.src = vu; video.load();
@@ -609,7 +699,17 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     if (video.readyState >= 2) {
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texV);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
-      gl.uniform1f(U.tm, video.currentTime); gl.uniform1f(U.on, state === 'place' ? scene.op : onAt(video.currentTime));
+      const t = video.currentTime, q = trackedQuad(t);
+      let bv = [0, 0];
+      if (scene.trackData && q) {
+        setQuad(q);
+        // How far the surface moved since the previous frame, in surface units: the blur for this frame.
+        const prev = trackedQuad(t - 1 / scene.trackData.fps);
+        if (prev) { const c = apply(homography(q, UNIT), ...apply(homography(UNIT, prev), 0.5, 0.5)); bv = [(0.5 - c[0]) * 0.6, (0.5 - c[1]) * 0.6]; }
+      }
+      gl.uniform2f(U.blurV, bv[0], bv[1]);
+      if (clockTime && clockSecond(t) !== clockSecShown) uploadClock(t);
+      gl.uniform1f(U.tm, t); gl.uniform1f(U.on, !q ? 0 : state === 'place' ? scene.op : onAt(t));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       if (cv.hidden) { cv.hidden = false; $('poster').hidden = true; }
     }
@@ -636,7 +736,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- the secret keypad ----
   let digits = '', state = 'idle';   // idle -> armed (two digits) -> played
   const size0 = '4.' + String(10 + Math.floor(Math.random() * 80));
-  const stamp = () => '08:14 · ' + (cfg.peek && digits.length === 2 ? '4.' + digits : size0) + ' MB';
+  const stamp = () => '08:14 · ' + (!cfg.peek || digits.length !== need() ? size0 : need() === 4 ? digits.slice(0, 2) + '.' + digits.slice(2) : '4.' + digits) + ' MB';
   function keyAt(x, y) {
     const row = Math.min(3, Math.floor(4 * y / innerHeight));
     if (row === 3) return '0';
@@ -648,21 +748,30 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     cv.hidden = true; $('poster').hidden = false; $('playBtn').hidden = false;
     $('scrubFill').style.width = '0'; $('tNow').textContent = '0:00'; $('t2').textContent = stamp();
   }
+  const need = () => set().kind === 'time' ? 4 : 2;
+  // All digits in: set the out and play. If the writing would already be showing, start again from the beginning
+  // so nobody sees it appear.
+  function finish() {
+    state = 'played'; $('t2').textContent = stamp();
+    const late = scene.reveal !== null && video.currentTime > Math.max(0, scene.reveal - 0.2);
+    play(+digits, cfg.resume === 'start' || late);
+  }
   function onTap(x, y) {
     if (cfg.entry === 'pause') {
-      // Play, pause, play: tap 1 plays (anywhere), tap 2 pauses and is the first digit, tap 3 is the second digit and plays on.
+      // Play, pause, play: tap 1 plays (anywhere); each pause and each play after it is a digit.
+      // Two digits: pause, play. Four (a time): pause, play, pause, play.
       if (state === 'idle') { state = 'running'; play(null); }
-      else if (state === 'running') { pause(); digits = keyAt(x, y); state = 'paused'; }
+      else if (state === 'running') { pause(); digits += keyAt(x, y); state = 'paused'; }
       else if (state === 'paused') {
-        digits += keyAt(x, y); state = 'played'; $('t2').textContent = stamp();
-        play(+digits, cfg.resume === 'start');
+        digits += keyAt(x, y);
+        if (digits.length >= need()) finish(); else { state = 'running'; play(null, false); }
       }
       return;
     }
-    // Digits first: two taps set the out, the next tap plays.
+    // Digits first: tap the digits, then the next tap plays.
     if (state === 'idle') {
       digits += keyAt(x, y);
-      if (digits.length === 2) state = 'armed';
+      if (digits.length === need()) state = 'armed';
       $('t2').textContent = stamp();
     } else if (state === 'armed') {
       state = 'played'; play(+digits);
@@ -699,6 +808,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // One box per out, 01 to 99. Stored together as lines of text.
   function buildOuts() {
     const list = $('outsList'), lines = set().outs.split('\n'); list.textContent = '';
+    $('cardsBtn').parentElement.hidden = set().kind === 'time';
+    if (set().kind === 'time') {
+      const p = document.createElement('p');
+      p.innerHTML = 'This effect predicts a <b>time</b>, so there are no boxes to fill. Tap four digits, hours then minutes: <b>0745</b> is 7:45, <b>1120</b> is 11:20. With play, pause, play that is pause, play, pause, play. Once all four are in, the file size shows the time, e.g. <b>07.45 MB</b>. Use it with the station clock video, which draws the hands; on any other video the time is written instead.';
+      list.appendChild(p); return;
+    }
     for (let i = 1; i <= 99; i++) {
       const n = String(i).padStart(2, '0'), row = document.createElement('div'); row.className = 'out';
       const lab = document.createElement('label'); lab.htmlFor = 'out' + n; lab.textContent = n;
@@ -712,7 +827,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     }
   }
   // A box showing a picture keeps the words it had underneath, ready for when the picture is removed.
-  const readOuts = () => Array.from({ length: 99 }, (_, i) => { const el = $('out' + nn(i + 1)); return (el.disabled ? el.dataset.text : el.value).replace(/\n/g, ' '); }).join('\n').replace(/\n+$/, '');
+  const readOuts = () => set().kind === 'time' || !$('out01') ? set().outs : Array.from({ length: 99 }, (_, i) => { const el = $('out' + nn(i + 1)); return (el.disabled ? el.dataset.text : el.value).replace(/\n/g, ' '); }).join('\n').replace(/\n+$/, '');
   let picFor = null;
   $('outsList').addEventListener('click', async e => {
     const b = e.target.closest('button.pic'); if (!b) return;
@@ -884,7 +999,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const n = parseInt($('tryNum').value, 10);
     adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n; adjMode = mode || (set().pics[nn(adjOut)] && !isDrawing(nn(adjOut)) ? 'pic' : 'text');
     $('sheet').hidden = true; reset(); state = 'place'; $('playBtn').hidden = true;
-    $('adjust').hidden = false; $('handles').hidden = false; $('adjBody').hidden = false; $('adjFold').textContent = 'Hide controls';
+    $('adjust').hidden = false; $('handles').hidden = !!scene.trackData; $('adjBody').hidden = false; $('adjFold').textContent = 'Hide controls';
     // Phones only decode frames once a video has played, so start it silently, stop, and go to the last frame.
     const toEnd = () => { video.muted = true; const p = video.play(); Promise.resolve(p).catch(() => {}).then(() => { video.pause(); seekTo(Math.max(0, video.duration - 0.05)); }); };
     if (video.readyState >= 1) toEnd(); else video.addEventListener('loadedmetadata', toEnd, { once: true });
