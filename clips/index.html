@@ -55,6 +55,7 @@ body {
   background: rgba(30,30,30,.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); pointer-events: none;
   display: flex; align-items: center; justify-content: center; }
 .play::before { content: ""; margin-left: 6px; border-left: 22px solid var(--fg); border-top: 14px solid transparent; border-bottom: 14px solid transparent; }
+.play.paused-icon::before { margin-left: 0; width: 8px; height: 26px; border: 0; border-left: 7px solid var(--fg); border-right: 7px solid var(--fg); }
 .adjust { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; background: rgba(0,0,0,.72); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 14px) max(16px, env(safe-area-inset-left, 0px));
   display: flex; flex-direction: column; gap: 8px; font-size: 15px; max-height: 50vh; box-sizing: border-box; }
@@ -186,7 +187,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     <div>
       <h2>Controls</h2>
       <ul>
-        <li><b>Play, pause, play</b> (the usual way): tap anywhere to play the video. Tap again to pause it: <b>where</b> you tap is the first digit. Tap to play it again: where you tap is the second digit, and the writing is set. To anyone watching, you just paused the video for a moment.</li>
+        <li><b>Two taps</b> (the usual way): <b>where</b> you tap to play the video is the first digit. Tap once more while it plays: that's the second digit. The second tap shows the pause symbol for a moment, the way a tap does on any video player, and the video carries on.</li>
+        <li><b>Play, pause, play</b>: tap anywhere to play the video. Tap again to pause it: <b>where</b> you tap is the first digit. Tap to play it again: where you tap is the second digit, and the writing is set. To anyone watching, you just paused the video for a moment.</li>
         <li><b>Do the pause before the reveal.</b> If the writing would already be showing when you pause, choose “Start again from the beginning” below, so nobody sees it appear.</li>
         <li><b>Digits first</b> (the other way): tap two digits on the still picture, then the next tap anywhere plays.</li>
         <li><b>Confirmation:</b> once both digits are in, the file size under the date changes to <b>4.NN MB</b>, where NN is the out. 4.07 MB means out 07.</li>
@@ -228,12 +230,14 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       <div class="srow"><label for="cfgRed">Red marker for hearts and diamonds</label><input type="checkbox" id="cfgRed"></div>
       <div class="srow"><label for="cfgEntry">How you tap in the out</label>
         <select id="cfgEntry">
+          <option value="two">Two taps: play, then one tap while it plays</option>
           <option value="pause">Play, pause, play</option>
           <option value="first">Digits first, then play</option>
         </select></div>
       <div class="srow"><label for="cfgTimeIn">Entering a time<br><small>For the station clock.</small></label>
         <select id="cfgTimeIn">
-          <option value="clock">12 boxes: hour, then minutes in fives</option>
+          <option value="clock">Clock face: hour, then minutes in fives</option>
+          <option value="grid">12 boxes: hour, then minutes in fives</option>
           <option value="digits">Four digits on the keypad (exact minutes)</option>
         </select></div>
       <div class="srow"><label for="cfgResume">After the last digit</label>
@@ -269,7 +273,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 21</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 22</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -296,7 +300,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 18, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { entry: 'two', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 22, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -377,7 +381,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     });
     cfg.v = 17;
   }
-  cfg.v = Math.max(cfg.v, 18);
+  if (cfg.v < 22) { cfg.entry = 'two'; cfg.timeIn = 'clock'; }   // version 22: two taps by default, clock face for times
+  cfg.v = Math.max(cfg.v, 22);
   cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
   const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
   STYLE.forEach(k => { cfg[k] = set()[k]; });
@@ -761,12 +766,18 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('scrubFill').style.width = '0'; $('tNow').textContent = '0:00'; $('t2').textContent = stamp();
   }
   const need = () => set().kind === 'time' ? 4 : 2;
-  const clockFace = () => set().kind === 'time' && cfg.timeIn === 'clock';
-  // Time input: the keypad grid with its bottom row split in three, so the screen is twelve boxes numbered 1 to 12
-  // (1 2 3 / 4 5 6 / 7 8 9 / 10 11 12).
+  const clockFace = () => set().kind === 'time' && cfg.timeIn !== 'digits';
+  // Time input: the whole screen is a clock face, stretched to fill it, so 12 is the middle of the top edge, 3 the middle
+  // of the right edge, and the corners are half past 1, 4, 7 and 10. Measuring the angle on the stretched face, rather
+  // than on the tall screen, is what makes taps near the corners read as the number you aimed at.
   function clockAt(x, y) {
-    const row = Math.min(3, Math.floor(4 * y / innerHeight)), col = Math.min(2, Math.floor(3 * x / innerWidth));
-    return row * 3 + col + 1;
+    if (cfg.timeIn === 'grid') {   // the 12-box grid: 1 2 3 / 4 5 6 / 7 8 9 / 10 11 12
+      const row = Math.min(3, Math.floor(4 * y / innerHeight)), col = Math.min(2, Math.floor(3 * x / innerWidth));
+      return row * 3 + col + 1;
+    }
+    const nx = (x - innerWidth / 2) / (innerWidth / 2), ny = (innerHeight / 2 - y) / (innerHeight / 2);
+    const a = Math.atan2(nx, ny);   // 0 at 12 o'clock, clockwise
+    return ((Math.round(a / (Math.PI / 6)) % 12) + 12) % 12 || 12;
   }
   // What one tap adds: a keypad digit, or for a time the hour (first tap) or minutes in fives (second tap).
   function entryAt(x, y) {
@@ -786,10 +797,27 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // so nobody sees it appear.
   function finish() {
     state = 'played'; $('t2').textContent = stamp();
+    const flashing = !$('playBtn').hidden && $('playBtn').classList.contains('paused-icon');
     const late = scene.reveal !== null && video.currentTime > Math.max(0, scene.reveal - 0.2);
     play(+digits, cfg.resume === 'start' || late);
+    if (flashing) $('playBtn').hidden = false;
+  }
+  // A tap on a playing video shows its controls for a moment, as video players do; this is the cover for the second tap.
+  let flashT = null;
+  function flashControls() {
+    const b = $('playBtn'); b.classList.add('paused-icon'); b.hidden = false;
+    clearTimeout(flashT); flashT = setTimeout(() => { b.hidden = true; b.classList.remove('paused-icon'); }, 1300);
   }
   function onTap(x, y) {
+    if (cfg.entry === 'two') {
+      // Two taps: the tap that plays the video is the first digit (or the hour); a tap while it plays is the next.
+      if (state === 'idle') { digits += entryAt(x, y); $('t2').textContent = stamp(); state = 'running'; play(null); }
+      else if (state === 'running') {
+        digits += entryAt(x, y);
+        if (digits.length >= need()) { flashControls(); finish(); } else { $('t2').textContent = stamp(); flashControls(); }
+      }
+      return;
+    }
     if (cfg.entry === 'pause') {
       // Play, pause, play: tap 1 plays (anywhere); each pause and each play after it is a digit.
       // Two digits: pause, play. Four (a time): pause, play, pause, play.
@@ -846,7 +874,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     if (set().kind === 'time') {
       const p = document.createElement('p');
       p.innerHTML = cfg.timeIn === 'clock'
-        ? 'This effect predicts a <b>time</b>, so there are no boxes to fill. The screen is <b>12 invisible boxes</b>: the usual keypad rows 1 2 3 / 4 5 6 / 7 8 9, with the bottom row split into <b>10 11 12</b>. <b>First tap: the hour. Second tap: the minutes in fives, read like a clock face</b> (box 9 for 45, box 4 for 20, box 12 for o\u2019clock). With play, pause, play: play, pause on the hour, play on the minutes. For 7:45: pause on box 7, play on box 9. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.'
+        ? (cfg.timeIn === 'clock'
+          ? 'This effect predicts a <b>time</b>, so there are no boxes to fill. The whole screen is an invisible <b>clock face</b>, stretched to fit it: 12 at the middle of the top edge, 3 at the middle of the right edge, 6 at the bottom, 9 at the left; the corners are between numbers (top right is half way between 1 and 2). Tap out near the edge where that number would be, not near the middle. <b>First tap: the hour. Second tap: the minutes in fives</b> (the 9 for 45, the 4 for 20, the 12 for o\u2019clock). With two taps: play on the hour, then tap once more on the minutes. For 7:45: play towards the 7 (lower left), then tap towards the 9 (middle of the left edge). The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.'
+          : 'This effect predicts a <b>time</b>, so there are no boxes to fill. The screen is <b>12 invisible boxes</b>: the usual keypad rows 1 2 3 / 4 5 6 / 7 8 9, with the bottom row split into <b>10 11 12</b>. <b>First tap: the hour. Second tap: the minutes in fives, read like a clock face</b> (box 9 for 45, box 4 for 20, box 12 for o\u2019clock). With two taps: play on the hour, tap once more on the minutes. For 7:45: play on box 7, then tap box 9. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.')
         : 'This effect predicts a <b>time</b>, so there are no boxes to fill. Tap four digits on the keypad, hours then minutes: <b>0745</b> is 7:45, <b>1120</b> is 11:20. With play, pause, play that is pause, play, pause, play. The file size shows the time once all four are in, e.g. <b>07.45 MB</b>. Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.';
       list.appendChild(p); return;
     }
