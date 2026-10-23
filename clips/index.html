@@ -308,7 +308,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 37</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 38</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -612,8 +612,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       // half where it is half hidden behind something moving past, all of it once clear. Skin covers it outright.
       '  if (mode > 0.5 && cardFill > 1.5) {',
       '    float seen = clamp((lum - 0.22) / max(ref.x - 0.32, 0.1), 0.0, 1.0) * (1.0 - smoothstep(ref.y + 0.06, ref.y + 0.16, sat));',
-      '    vec3 lit3 = clamp(c / max(ref.x, 0.2), 0.0, 1.1) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
-      '    gl_FragColor = vec4(mix(c, im.rgb * lit3, a * seen * on), 1.0); return;',
+      // Printed like ink: the face's white lets the real card show through unchanged, its colours darken it.
+      '    gl_FragColor = vec4(mix(c, c * im.rgb, a * seen * on), 1.0); return;',
       '  }',
       '  if (mode > 0.5) {',
       '    float lit = clamp(lum / max(ref.x, 0.2), 0.55 + 0.37 * cardFill, 1.1 - 0.04 * cardFill) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
