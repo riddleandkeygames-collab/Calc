@@ -304,7 +304,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 29</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 30</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -628,7 +628,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     gl.uniformMatrix3fv(U.H, false, cm(h)); gl.uniformMatrix3fv(U.Hf, false, cm(f));
   }
   // For a moving camera: the surface's corners at video time t from the tracking data, or null before it comes into view.
-  const trackIdx = (tr, t) => Math.min(Math.round(t * tr.fps) - tr.first, tr.quads.length - 1);
+  // Frame k is on screen from k/fps until the next one, so round down (a hair of slack for times like 6.20833 that are really frame 149).
+  const trackIdx = (tr, t) => Math.min(Math.floor(t * tr.fps + 0.05) - tr.first, tr.quads.length - 1);
   function trackedQuad(t) {
     const tr = scene.trackData; if (!tr) return scene.quad;
     const i = trackIdx(tr, t);
@@ -790,11 +791,15 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     ready = true; $('loading').hidden = true;
   }
   const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
-  function frame() {
+  // Where the browser can say exactly which video frame it is showing, draw once per video frame using that frame's own time,
+  // so a tracked surface's corners always belong to the picture underneath (currentTime can be a frame ahead or behind).
+  const VFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+  let vfcWaiting = false;
+  function frame(meta) {
     if (video.readyState >= 2) {
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texV);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
-      const t = video.currentTime, q = trackedQuad(t);
+      const t = meta && meta.mediaTime !== undefined ? meta.mediaTime : video.currentTime, q = trackedQuad(t);
       let bv = [0, 0];
       // The clean-up patch belongs on the clock face: off until the tracked surface is in view, or it paints over the platform.
       if (scene.patch) gl.uniform1f(U.usePatch, q ? 1 : 0);
@@ -815,7 +820,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const d = video.duration || 8;
     $('scrubFill').style.width = (100 * video.currentTime / d) + '%';
     $('tNow').textContent = fmt(video.currentTime);
-    if (playing) requestAnimationFrame(frame);
+    if (playing && !VFC) requestAnimationFrame(frame);
+    else if (playing && !vfcWaiting) { vfcWaiting = true; video.requestVideoFrameCallback((now, m) => { vfcWaiting = false; frame(m); }); }
   }
   // out null plays with nothing written yet; fromStart false carries on from where it was paused.
   function play(out, fromStart = true) {
