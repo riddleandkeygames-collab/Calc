@@ -120,6 +120,17 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 .keypad { display: grid; grid-template-columns: repeat(3, 56px); gap: 4px; }
 .keypad span { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; text-align: center; padding: 8px 0; font-weight: 600; }
 .keypad .zero { grid-column: 1 / span 3; }
+.how { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.how ol, .how ul { margin: 0 0 8px; padding-left: 20px; }
+.how li { margin-bottom: 4px; }
+#howText { flex: 1 1 220px; }
+#howPic svg { width: 132px; height: auto; display: block; }
+#howPic .ph { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+#howPic .ln { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+#howPic text { fill: currentColor; font: 600 15px var(--ui); text-anchor: middle; dominant-baseline: central; }
+#howPic .small { font-size: 12px; font-weight: 500; opacity: 0.75; }
+#howPic .suit { font-size: 20px; }
+#howPic .red { fill: #d0312d; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
 
@@ -206,26 +217,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     </div>
 
     <div>
-      <h2>Secret keypad</h2>
-      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-        <div class="keypad" aria-label="Keypad layout"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span class="zero">0</span></div>
-        <p style="flex:1 1 200px">The whole screen is split into four rows of equal height. The bottom row is all 0. Only where you tap for a digit matters; the tap that starts the video can be anywhere.</p>
+      <h2>How to perform</h2>
+      <p class="note" id="howFor"></p>
+      <div class="how">
+        <div id="howPic" aria-hidden="true"></div>
+        <div id="howText"></div>
       </div>
-    </div>
-
-    <div>
-      <h2>Controls</h2>
-      <ul>
-        <li><b>Two taps</b>: <b>where</b> you tap to play the video is the first digit. Tap once more while it plays: that's the second digit. The second tap shows the pause symbol for a moment, the way a tap does on any video player, and the video carries on.</li>
-        <li><b>Play, pause, play</b> (the usual way): tap anywhere to play the video. Tap again to pause it: <b>where</b> you tap is the first digit. Tap to play it again: where you tap is the second digit, and the writing is set. To anyone watching, you just paused the video for a moment.</li>
-        <li><b>Do the pause before the reveal.</b> If the writing would already be showing when you pause, choose “Start again from the beginning” below, so nobody sees it appear.</li>
-        <li><b>Digits first</b> (the other way): tap two digits on the still picture, then the next tap anywhere plays.</li>
-        <li><b>Confirmation:</b> once both digits are in, the file size under the date changes to <b>4.NN MB</b>, where NN is the out. 4.07 MB means out 07.</li>
-        <li><b>Cards</b> (playing-card effects): the screen is a clock face for the value (1 Ace, 2 to 10, 11 Jack, 12 Queen; <b>two quick taps on the 1 for King</b>). Then tap a quarter of the screen for the suit, clockwise from top left: <b>Clubs, Hearts, Spades, Diamonds</b> (CHaSeD). A tap in the <b>middle</b> for the value is the <b>Joker</b>, and the next tap just plays. With play, pause, play: play, pause on the value, play on the suit. The file size shows the value, then the suit after the point (1 Clubs, 2 Hearts, 3 Spades, 4 Diamonds): 7.2x MB is the 7 of Hearts, 13.4x MB the King of Diamonds, 53.0 MB the Joker.</li>
-        <li><b>Swipe up:</b> take back the last tap only, if you hit the wrong place.</li>
-        <li><b>Swipe left or right:</b> clears the digits and goes back to the start. Use it if you mistype.</li>
-        <li><b>Swipe down:</b> opens this screen.</li>
-      </ul>
     </div>
 
     <div>
@@ -308,7 +305,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 39</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 40</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -1052,11 +1049,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     $('cardsBtn').parentElement.hidden = set().kind === 'time';
     if (set().kind === 'time') {
       const p = document.createElement('p');
-      p.innerHTML = cfg.timeIn === 'clock'
-        ? (cfg.timeIn === 'clock'
-          ? 'This effect predicts a <b>time</b>, so there are no boxes to fill. The whole screen is an invisible <b>clock face</b>, stretched to fit it: 12 at the middle of the top edge, 3 at the middle of the right edge, 6 at the bottom, 9 at the left; the corners are between numbers (top right is half way between 1 and 2). Tap out near the edge where that number would be, not near the middle. <b>First tap: the hour. Second tap: the minutes in fives</b> (the 9 for 45, the 4 for 20, the 12 for o\u2019clock). With play, pause, play: tap anywhere to play, pause by tapping towards the hour, play again by tapping towards the minutes. For 7:45: play, pause towards the 7 (lower left), play towards the 9 (middle of the left edge). With two taps instead: play on the hour, then one tap on the minutes. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe up to take back the last tap. Use it with the station clock video; on any other video the time is written instead.'
-          : 'This effect predicts a <b>time</b>, so there are no boxes to fill. The screen is <b>12 invisible boxes</b>: the usual keypad rows 1 2 3 / 4 5 6 / 7 8 9, with the bottom row split into <b>10 11 12</b>. <b>First tap: the hour. Second tap: the minutes in fives, read like a clock face</b> (box 9 for 45, box 4 for 20, box 12 for o\u2019clock). With two taps: play on the hour, tap once more on the minutes. For 7:45: play on box 7, then tap box 9. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe up to take back the last tap. Use it with the station clock video; on any other video the time is written instead.')
-        : 'This effect predicts a <b>time</b>, so there are no boxes to fill. Tap four digits on the keypad, hours then minutes: <b>0745</b> is 7:45, <b>1120</b> is 11:20. With play, pause, play that is pause, play, pause, play. The file size shows the time once all four are in, e.g. <b>07.45 MB</b>. Swipe up to take back the last tap. Use it with the station clock video; on any other video the time is written instead.';
+      p.innerHTML = 'This effect predicts a <b>time</b>, so there are no boxes to fill. How to enter it is under <b>How to perform</b> above.';
       list.appendChild(p); return;
     }
     for (let i = 1; i <= 99; i++) {
@@ -1117,7 +1110,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     Object.keys(picImgs).forEach(k => delete picImgs[k]); Object.keys(set().pics).forEach(loadPic);
     fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; loadFont();
     if (cfg.scene !== before) loadScene(); else scene = sceneOf(cfg.scene);
-    fillSets(); buildOuts();
+    fillSets(); buildOuts(); fillHow();
   }
   const setMsg = t => { $('setMsg').textContent = t; $('setMsg').hidden = !t; clearTimeout(setMsg.t); setMsg.t = setTimeout(() => { $('setMsg').hidden = true; }, 6000); };
   function addSet(name, outs, pics) {
@@ -1150,10 +1143,71 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     if (cfg.recDay === 'date' && !$('cfgRecDate').value) $('cfgRecDate').value = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     cfg.recDate = $('cfgRecDate').value; save(); recFields();
   }));
+  // ---- instructions for the effect chosen now ----
+  function howPic(mode) {
+    const W = 132, H = 272, R = 14, svg = inner => '<svg viewBox="0 0 ' + W + ' ' + H + '"><rect class="ph" x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="' + R + '"/>' + inner + '</svg>';
+    const t = (x, y, txt, cls) => '<text x="' + x + '" y="' + y + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + txt + '</text>';
+    const line = (x1, y1, x2, y2) => '<line class="ln" x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '"/>';
+    if (mode === 'keypad' || mode === 'time-digits') {
+      let g = ''; for (let r = 1; r < 4; r++) g += line(4, H * r / 4, W - 4, H * r / 4);
+      for (let c = 1; c < 3; c++) g += line(W * c / 3, 4, W * c / 3, H * 3 / 4);
+      for (let i = 0; i < 9; i++) g += t(W * (i % 3 + 0.5) / 3, H * (Math.floor(i / 3) + 0.5) / 4, i + 1);
+      return svg(g + t(W / 2, H * 7 / 8, 0));
+    }
+    if (mode === 'time-grid') {
+      let g = ''; for (let r = 1; r < 4; r++) g += line(4, H * r / 4, W - 4, H * r / 4);
+      for (let c = 1; c < 3; c++) g += line(W * c / 3, 4, W * c / 3, H - 4);
+      for (let i = 0; i < 12; i++) g += t(W * (i % 3 + 0.5) / 3, H * (Math.floor(i / 3) + 0.5) / 4, i + 1);
+      return svg(g);
+    }
+    // A clock face stretched to the screen: 12 at the top edge, 3 at the right, 6 at the bottom, 9 at the left.
+    let g = '';
+    for (let n = 1; n <= 12; n++) { const a = n * Math.PI / 6; g += t(W / 2 + 0.4 * W * Math.sin(a), H / 2 - 0.43 * H * Math.cos(a), n); }
+    if (mode === 'cards') {
+      g += line(W / 2, H * 0.12, W / 2, H / 2 - 0.2 * W) + line(W / 2, H / 2 + 0.2 * W, W / 2, H * 0.88) + line(W * 0.2, H / 2, W / 2 - 0.2 * W, H / 2) + line(W / 2 + 0.2 * W, H / 2, W * 0.8, H / 2);
+      g += '<circle class="ln" cx="' + W / 2 + '" cy="' + H / 2 + '" r="' + 0.2 * W + '"/>' + t(W / 2, H / 2, 'Joker', 'small');
+      g += t(W * 0.3, H * 0.38, '♣', 'suit') + t(W * 0.7, H * 0.38, '♥', 'suit red') + t(W * 0.7, H * 0.62, '♠', 'suit') + t(W * 0.3, H * 0.62, '♦', 'suit red');
+    }
+    return svg(g);
+  }
+  function fillHow() {
+    const kind = set().kind, sc = sceneOf(cfg.scene);
+    const mode = kind === 'time' ? 'time-' + cfg.timeIn : kind === 'cards' && cfg.cardIn !== 'keypad' ? 'cards' : 'keypad';
+    $('howFor').innerHTML = 'For <b>' + set().name.replace(/</g, '&lt;') + '</b> on the video <b>' + (sc.name || '').replace(/</g, '&lt;') + '</b>.';
+    $('howPic').innerHTML = howPic(mode);
+    // What the two entries are for this effect, then the taps for the entry method chosen.
+    const A = { cards: 'on the <b>value</b>, round the clock face (1 Ace, 11 Jack, 12 Queen; <b>two quick taps on the 1 for King</b>; the <b>middle</b> for the Joker)', 'time-clock': 'towards the <b>hour</b> on the clock face', 'time-grid': 'on the box for the <b>hour</b>', keypad: 'on the <b>first digit</b>' }[mode];
+    const B = { cards: 'in the <b>quarter for the suit</b>: Clubs top left, Hearts top right, Spades bottom right, Diamonds bottom left (CHaSeD, clockwise)', 'time-clock': 'towards the <b>minutes in fives</b> (the 9 for 45, the 4 for 20, the 12 for o’clock)', 'time-grid': 'on the box for the <b>minutes in fives</b>, read like a clock (9 for 45, 4 for 20, 12 for o’clock)', keypad: 'on the <b>second digit</b>' }[mode];
+    let steps;
+    if (mode === 'time-digits') steps = {
+      pause: ['Tap anywhere to play.', 'Each pause and each play after that is the next digit: four in all, hours then minutes (0745 is 7:45).'],
+      two: ['Tap the first digit to play.', 'Tap the other three while it plays.'],
+      first: ['Tap the four digits on the still picture, hours then minutes.', 'Tap anywhere to play.'] }[cfg.entry];
+    else steps = {
+      pause: ['Tap anywhere to play.', 'Tap to pause, ' + A + '.', 'Tap to play again, ' + B + '. To anyone watching, you just paused it for a moment.'],
+      two: ['Tap to play, ' + A + '.', 'While it plays, tap once ' + B + '. The pause symbol shows for a moment, as on any video player, and it carries on.'],
+      first: ['On the still picture, tap ' + A + '.', 'Then tap ' + B + '.', 'Tap anywhere to play.'] }[cfg.entry];
+    if (mode === 'cards' && cfg.entry !== 'first') steps.push('For the Joker, the tap after the middle just plays.');
+    const ex = {
+      cards: '7 of Hearts: the 7 (lower left), then the top right quarter.' + (cfg.peek ? ' The file size shows the value, then the suit after the point (1 Clubs, 2 Hearts, 3 Spades, 4 Diamonds): <b>7.2x MB</b>. King of Diamonds is 13.4x MB, the Joker 53.0 MB.' : ''),
+      'time-clock': '7:45: towards the 7 (lower left), then towards the 9 (middle of the left edge).' + (cfg.peek ? ' The file size shows <b>07.xx MB</b> after the hour and <b>07.45 MB</b> after the minutes.' : ''),
+      'time-grid': '7:45: box 7, then box 9.' + (cfg.peek ? ' The file size shows <b>07.xx MB</b> after the hour and <b>07.45 MB</b> after the minutes.' : ''),
+      'time-digits': '7:45 is 0 7 4 5.' + (cfg.peek ? ' The file size shows <b>07.45 MB</b> once all four are in.' : ''),
+      keypad: 'Out 07 is 0 then 7: the bottom row, then the left of the third row.' + (cfg.peek ? ' The file size changes to <b>4.07 MB</b> once both are in.' : '') }[mode];
+    const notes = [];
+    if (sc.reveal > 0) notes.push('On this video the ' + (sc.card ? 'card' : kind === 'time' ? 'clock' : 'surface') + ' comes into view at about <b>' + sc.reveal.toFixed(1) + ' s</b>. Finish before then: a last tap after it starts the video again from the beginning (or always, with “Start again from the beginning” below), so nobody sees it appear.');
+    if (sc.card) notes.push('The chosen card replaces the blank card' + (kind === 'cards' ? '' : '; use a playing-card effect with it') + '.');
+    if (kind === 'time' && !sc.clock) notes.push('This video has no clock, so the time is written instead. Use the station clock video for the clock.');
+    if (kind === 'cards' && cfg.cardIn === 'keypad') notes.push('Cards are entered as box numbers here; choose “Clock face for the value” below for the card input.');
+    if (!cfg.peek) notes.push('The file-size confirmation is off (turn it on below).');
+    $('howText').innerHTML = '<ol>' + steps.map(x => '<li>' + x + '</li>').join('') + '</ol><p><b>Example:</b> ' + ex + '</p>' +
+      (notes.length ? '<ul>' + notes.map(x => '<li>' + x + '</li>').join('') + '</ul>' : '') +
+      '<ul><li><b>Swipe up:</b> take back the last tap.</li><li><b>Swipe left or right:</b> clear everything and start again.</li><li><b>Swipe down:</b> open this screen.</li></ul>';
+  }
   function openSheet() {
     recFields();
     fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgTimeIn').value = cfg.timeIn; $('cfgCardIn').value = cfg.cardIn; $('cfgResume').value = cfg.resume;
-    fillSets(); buildOuts();
+    fillSets(); buildOuts(); fillHow();
     $('sheet').hidden = false;
   }
   function readSheet() {
@@ -1162,6 +1216,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     STYLE.forEach(k => { set()[k] = cfg[k]; });
     set().outs = readOuts(); save();
     if (sceneChanged) { loadScene(); $('delRow').hidden = !!SCENES[cfg.scene]; }
+    fillHow();
   }
   ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek', 'cfgEntry', 'cfgTimeIn', 'cfgCardIn', 'cfgResume'].forEach(id => $(id).addEventListener('change', readSheet));
   $('cfgTimeIn').addEventListener('change', () => buildOuts());
