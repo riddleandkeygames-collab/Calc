@@ -304,7 +304,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 30</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 31</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -557,7 +557,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       'precision highp float;',
       'varying vec2 uv; uniform sampler2D vid; uniform sampler2D txt; uniform mat3 H; uniform vec2 size; uniform vec3 inkC;',
       'uniform float on; uniform float tm; uniform float useMask; uniform vec2 ref; uniform float light; uniform float mode;',
-      'uniform mat3 Hf; uniform vec4 patchR; uniform float usePatch; uniform vec2 blurV;',
+      'uniform mat3 Hf; uniform vec4 patchR; uniform float usePatch; uniform vec2 blurV; uniform float cardFill;',
       'float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
       'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
       '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }',
@@ -589,10 +589,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       '  float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));',
       // Optional mask: only where the pixel looks like the surface (about as bright, no more colourful), so a cover or a hand hides the writing.
       '  float m = mix(1.0, smoothstep(ref.x - 0.27, ref.x - 0.12, lum) * (1.0 - smoothstep(ref.y + 0.06, ref.y + 0.16, sat)), useMask);',
+      // A card face: only skin (colourful) or the dark background hides it, not the grey shadows fingers cast on the card.
+      '  if (cardFill > 0.5) m = smoothstep(0.18, 0.3, lum) * (1.0 - smoothstep(0.08, 0.15, sat));',
       // Real ink is patchy, a little grainy like the rest of the footage, and a shiny surface's highlights sit on top of it.
       // A picture keeps its own colours but takes on the light falling on the surface beneath it, and the footage's grain.
       '  if (mode > 0.5) {',
-      '    float lit = clamp(lum / max(ref.x, 0.2), 0.55, 1.1) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
+      '    float lit = clamp(lum / max(ref.x, 0.2), 0.55 + 0.37 * cardFill, 1.1 - 0.04 * cardFill) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
       '    gl_FragColor = vec4(mix(c, im.rgb * lit, a * m * on), 1.0); return;',
       '  }',
       '  float patch = 0.9 + 0.1 * vnoise(bu * 22.0);',
@@ -611,7 +613,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.LINEAR)); return t; };
     texV = mk(0); texI = mk(1);
     gl.uniform1i(gl.getUniformLocation(prog, 'vid'), 0); gl.uniform1i(gl.getUniformLocation(prog, 'txt'), 1);
-    ['H', 'size', 'inkC', 'on', 'tm', 'useMask', 'ref', 'light', 'mode', 'Hf', 'patchR', 'usePatch', 'blurV'].forEach(n => { U[n] = gl.getUniformLocation(prog, n); });
+    ['H', 'size', 'inkC', 'on', 'tm', 'useMask', 'ref', 'light', 'mode', 'Hf', 'patchR', 'usePatch', 'blurV', 'cardFill'].forEach(n => { U[n] = gl.getUniformLocation(prog, n); });
   }
   function setScene() {
     if (cv.width !== scene.w || cv.height !== scene.h) { cv.width = scene.w; cv.height = scene.h; }
@@ -619,7 +621,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     setQuad(scene.quad);
     gl.uniform2f(U.size, scene.w, scene.h);
     gl.uniform1f(U.usePatch, scene.patch ? 1 : 0); if (scene.patch) gl.uniform4fv(U.patchR, scene.patch);
-    gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
+    gl.uniform1f(U.cardFill, scene.card ? 1 : 0); gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
   }
   function setQuad(q) {
     const h = homography(q, UNIT), f = homography(UNIT, q);
@@ -820,7 +822,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const d = video.duration || 8;
     $('scrubFill').style.width = (100 * video.currentTime / d) + '%';
     $('tNow').textContent = fmt(video.currentTime);
-    if (playing && !VFC) requestAnimationFrame(frame);
+    // While paused (or seeking) no new video frames arrive, so keep redrawing on the screen's clock instead.
+    if (playing && (!VFC || video.paused)) requestAnimationFrame(frame);
     else if (playing && !vfcWaiting) { vfcWaiting = true; video.requestVideoFrameCallback((now, m) => { vfcWaiting = false; frame(m); }); }
   }
   // out null plays with nothing written yet; fromStart false carries on from where it was paused.
