@@ -304,7 +304,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 28</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 29</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -322,7 +322,13 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     // The camera tilts up to a station clock with no hands. The face is tracked frame by frame (station-track.json), and the
     // app draws the hands. patch hides a smudge the AI left on the face, in face coordinates (left, top, right, bottom).
     station: { name: 'Station clock (camera tilts up)', src: 'station.mp4', poster: 'station.jpg', w: 1080, h: 1920, quad: [[158.0, 457.0], [918.0, 457.0], [918.0, 1153.0], [158.0, 1153.0]],
-      clock: true, track: 'station-track.json', reveal: 5.7, patch: [0.38, 0.57, 0.63, 0.77], ref: [0.86, 0.05] }
+      clock: true, track: 'station-track.json', reveal: 5.7, patch: [0.38, 0.57, 0.63, 0.77], ref: [0.86, 0.05] },
+    // A blank card turned face up. Its corners are tracked frame by frame from the moment the face shows, and the
+    // whole face is replaced by the chosen card (faces/01.jpg to 53.jpg); fingers stay in front because of the mask.
+    cardm: { name: 'Card turned over (man, red back)', src: 'cardm.mp4', poster: 'cardm.jpg', w: 1080, h: 1920, quad: [[367.9, 565.7], [692.4, 569.7], [692.9, 1017.7], [367.1, 1018.5]],
+      card: true, track: 'cardm-track.json', reveal: 6.2 },
+    cardf: { name: 'Card turned over (woman, blue back)', src: 'cardf.mp4', poster: 'cardf.jpg', w: 1080, h: 1920, quad: [[336.8, 556.9], [740.0, 556.4], [738.5, 1127.1], [338.7, 1128.6]],
+      card: true, track: 'cardf-track.json', reveal: 6.7 }
   };
   const VALUES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
   const SUITS = ['Clubs', 'Hearts', 'Spades', 'Diamonds'];
@@ -331,7 +337,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { cardIn: 'clock', recDay: 'today', recMode: 'fixed', recTime: '08:14', recDate: '', entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 28, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { cardIn: 'clock', recDay: 'today', recMode: 'fixed', recTime: '08:14', recDate: '', entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 29, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -374,6 +380,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     { id: 'forces', name: 'Common choices', outs: list(COMMON), pics: {} },
     { id: 'doodles', name: 'Common choices (doodles)', outs: list(COMMON), pics: doodlePics() },
     { id: 'clock', name: 'Station clock (time)', kind: 'time', outs: '', pics: {}, scene: 'station' },
+    { id: 'cardman', name: 'Card in hand (man)', kind: 'cards', outs: CARDS.join('\n') + '\nJoker', pics: {}, scene: 'cardm' },
+    { id: 'cardwoman', name: 'Card in hand (woman)', kind: 'cards', outs: CARDS.join('\n') + '\nJoker', pics: {}, scene: 'cardf' },
     { id: 'cities', name: 'Cities', outs: list(['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney', 'Barcelona', 'Dubai', 'Las Vegas', 'Amsterdam']), pics: {} }
   ];
   const startSets = (outs, pics) => [
@@ -420,7 +428,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       const a = x.outs.split('\n'); while (a.length < 53) a.push(''); if (!a[52].trim()) a[52] = 'Joker'; x.outs = a.join('\n');
     }
   });
-  cfg.v = Math.max(cfg.v, 28);
+  if (cfg.v < 29) {   // version 29: the card turned over in someone's hand
+    const look = cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
+    ['cardman', 'cardwoman'].forEach(id => { const r = READY.find(x => x.id === id);
+      if (!cfg.sets.some(x => x.id === id)) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: {} }, Object.fromEntries(STYLE.map(k => [k, r[k] ?? look[k] ?? cfg[k]])))); });
+  }
+  cfg.v = Math.max(cfg.v, 29);
   cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
   const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
   STYLE.forEach(k => { cfg[k] = set()[k]; });
@@ -447,7 +460,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const own = cfg.scenes[key] || (cfg.scenes[key] = {});
     const base = { quad: b.quad || defaultQuad(b.w, b.h), mask: !!SCENES[key] && !b.clock, ref: b.ref || [0.82, 0.03] };
     const eff = set().place[key] || (set().place[key] = {});
-    const sc = Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster, clock: !!b.clock, trackSrc: b.track, trackData: b.track && trackCache[b.track], patch: b.patch },
+    const sc = Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster, clock: !!b.clock, card: !!b.card, trackSrc: b.track, trackData: b.track && trackCache[b.track], patch: b.patch },
       base, PLACE, own, eff, { own, eff });
     // When the writing first becomes visible, so a late final digit restarts the video instead of the writing popping in.
     sc.reveal = b.reveal !== undefined ? b.reveal : (sc.from > 0 ? sc.from : null);
@@ -615,11 +628,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     gl.uniformMatrix3fv(U.H, false, cm(h)); gl.uniformMatrix3fv(U.Hf, false, cm(f));
   }
   // For a moving camera: the surface's corners at video time t from the tracking data, or null before it comes into view.
+  const trackIdx = (tr, t) => Math.min(Math.round(t * tr.fps) - tr.first, tr.quads.length - 1);
   function trackedQuad(t) {
     const tr = scene.trackData; if (!tr) return scene.quad;
-    const i = Math.round(t * tr.fps) - tr.first;
+    const i = trackIdx(tr, t);
     if (i < 0) return null;
-    const q = tr.quads[Math.min(i, tr.quads.length - 1)];
+    const q = tr.quads[i];
     return [[q[0], q[1]], [q[2], q[3]], [q[4], q[5]], [q[6], q[7]]];
   }
 
@@ -687,9 +701,41 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     c.drawImage(img, -pw / 2, -ph / 2, pw, ph); c.restore();
   }
   const isDrawing = k => !!(set().pics[k] && set().pics[k].ink);
+  // ---- a whole card face, filling a tracked card ----
+  // Which of faces/01.jpg..53.jpg an out's words name ("Ace|of Clubs", "10 of hearts", "Joker"), in the order Clubs, Hearts, Spades, Diamonds.
+  function faceOf(text) {
+    const t = text.replace(/\|/g, ' ').toLowerCase();
+    if (/joker/.test(t)) return 53;
+    const v = t.match(/\b(ace|a|10|[2-9]|jack|j|queen|q|king|k)\b/), s = t.match(/club|heart|spade|diamond/);
+    if (!v || !s) return 0;
+    const vi = { ace: 1, a: 1, jack: 11, j: 11, queen: 12, q: 12, king: 13, k: 13 }[v[1]] || +v[1];
+    return ['club', 'heart', 'spade', 'diamond'].indexOf(s[0]) * 13 + vi;
+  }
+  const faceImgs = {}; let wantOut = null;
+  function faceImg(f) {
+    if (faceImgs[f]) return faceImgs[f].complete && faceImgs[f].naturalWidth ? faceImgs[f] : null;
+    const img = faceImgs[f] = new Image();
+    img.onload = () => { if (scene.card && wantOut !== null) uploadOut(wantOut); };   // still the one wanted: show it now
+    img.src = 'faces/' + nn(f) + '.jpg';
+    return null;
+  }
+  function fillCard(img) {
+    ink.width = img.width; ink.height = img.height;
+    const c = ink.getContext('2d'); c.clearRect(0, 0, ink.width, ink.height); c.drawImage(img, 0, 0);
+  }
   // Draws out n (or nothing, for null) and hands it to the shader.
   function uploadOut(n) {
-    clockTime = null;
+    clockTime = null; wantOut = n;
+    if (n !== null && scene.card && set().kind !== 'time') {
+      // On a card video the out becomes the whole face: your own picture in that box, else the card its words name.
+      const k = nn(n), p = set().pics[k] && !isDrawing(k) && picImgs[k], f = p ? 0 : faceOf(outText(n)), img = p || (f && faceImg(f));
+      if (img || f) {
+        if (img) fillCard(img); else { ink.width = ink.height = 4; ink.getContext('2d').clearRect(0, 0, 4, 4); }
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texI);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ink);
+        gl.uniform1f(U.mode, 1); return;
+      }
+    }
     if (n !== null && set().kind === 'time') {
       const t = timeOf(n);
       if (scene.clock) { clockTime = t; clockSec0 = 5 + Math.floor(Math.random() * 40); uploadClock(video.currentTime); return; }
@@ -754,6 +800,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       if (scene.patch) gl.uniform1f(U.usePatch, q ? 1 : 0);
       if (scene.trackData && q) {
         setQuad(q);
+        // A card gets darker as it tilts away from the light; follow its brightness so the mask still finds it.
+        if (scene.trackData.lum) gl.uniform2f(U.ref, scene.trackData.lum[trackIdx(scene.trackData, t)], scene.ref[1]);
         // How far the surface moved since the previous frame, in surface units: the blur for this frame.
         const prev = trackedQuad(t - 1 / scene.trackData.fps);
         if (prev) { const c = apply(homography(q, UNIT), ...apply(homography(UNIT, prev), 0.5, 0.5)); bv = [(0.5 - c[0]) * 0.6, (0.5 - c[1]) * 0.6]; }
