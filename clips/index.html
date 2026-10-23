@@ -125,6 +125,10 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
 .how li { margin-bottom: 4px; }
 #howText { flex: 1 1 220px; }
 #howPic svg { width: 132px; height: auto; display: block; }
+.howFigs { display: flex; gap: 12px; }
+.howFig { margin: 0; text-align: center; }
+.howFig figcaption { font-weight: 600; margin-top: 6px; }
+#howPic .suit { font-size: 28px; }
 #howPic .ph { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
 #howPic .ln { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
 #howPic text { fill: currentColor; font: 600 15px var(--ui); text-anchor: middle; dominant-baseline: central; }
@@ -305,7 +309,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 40</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 41</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -1164,9 +1168,13 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     let g = '';
     for (let n = 1; n <= 12; n++) { const a = n * Math.PI / 6; g += t(W / 2 + 0.4 * W * Math.sin(a), H / 2 - 0.43 * H * Math.cos(a), n); }
     if (mode === 'cards') {
-      g += line(W / 2, H * 0.12, W / 2, H / 2 - 0.2 * W) + line(W / 2, H / 2 + 0.2 * W, W / 2, H * 0.88) + line(W * 0.2, H / 2, W / 2 - 0.2 * W, H / 2) + line(W / 2 + 0.2 * W, H / 2, W * 0.8, H / 2);
+      // Two pictures, one per tap: the clock face (with the Joker in the middle) for the value, then the quarters for the suit.
+      const fig = (pic, cap) => '<figure class="howFig">' + pic + '<figcaption>' + cap + '</figcaption></figure>';
       g += '<circle class="ln" cx="' + W / 2 + '" cy="' + H / 2 + '" r="' + 0.2 * W + '"/>' + t(W / 2, H / 2, 'Joker', 'small');
-      g += t(W * 0.3, H * 0.38, '♣', 'suit') + t(W * 0.7, H * 0.38, '♥', 'suit red') + t(W * 0.7, H * 0.62, '♠', 'suit') + t(W * 0.3, H * 0.62, '♦', 'suit red');
+      const suits = line(W / 2, 4, W / 2, H - 4) + line(4, H / 2, W - 4, H / 2) +
+        t(W / 4, H / 4, '\u2663', 'suit') + t(W * 3 / 4, H / 4, '\u2665', 'suit red') + t(W * 3 / 4, H * 3 / 4, '\u2660', 'suit') + t(W / 4, H * 3 / 4, '\u2666', 'suit red') +
+        t(W / 4, H / 4 + 24, 'Clubs', 'small') + t(W * 3 / 4, H / 4 + 24, 'Hearts', 'small') + t(W * 3 / 4, H * 3 / 4 + 24, 'Spades', 'small') + t(W / 4, H * 3 / 4 + 24, 'Diamonds', 'small');
+      return '<div class="howFigs">' + fig(svg(g), '1. Value') + fig(svg(suits), '2. Suit') + '</div>';
     }
     return svg(g);
   }
