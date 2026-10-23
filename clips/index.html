@@ -308,7 +308,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 34</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 35</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -605,12 +605,12 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       '  if (cardFill > 0.5 && cardFill < 1.5) m = smoothstep(0.18, 0.3, lum) * (1.0 - smoothstep(0.08, 0.15, sat));',
       // Real ink is patchy, a little grainy like the rest of the footage, and a shiny surface's highlights sit on top of it.
       // A picture keeps its own colours but takes on the light falling on the surface beneath it, and the footage's grain.
-      // A card in the scene's own light: printed onto whatever is there, like ink, so it shows exactly as much as the blank card
-      // does (half hidden behind something passing in front is half shown). Only skin covers it outright.
+      // A card in the scene's own light shows exactly as much as the blank card does: none on something dark in front of it,
+      // half where it is half hidden behind something moving past, all of it once clear. Skin covers it outright.
       '  if (mode > 0.5 && cardFill > 1.5) {',
-      '    float skin = 1.0 - smoothstep(ref.y + 0.06, ref.y + 0.16, sat);',
-      '    vec3 lit3 = c / max(ref.x, 0.2) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
-      '    gl_FragColor = vec4(mix(c, min(im.rgb * lit3, vec3(1.0)), a * skin * on), 1.0); return;',
+      '    float seen = clamp((lum - 0.22) / max(ref.x - 0.32, 0.1), 0.0, 1.0) * (1.0 - smoothstep(ref.y + 0.06, ref.y + 0.16, sat));',
+      '    vec3 lit3 = clamp(c / max(ref.x, 0.2), 0.0, 1.1) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
+      '    gl_FragColor = vec4(mix(c, im.rgb * lit3, a * seen * on), 1.0); return;',
       '  }',
       '  if (mode > 0.5) {',
       '    float lit = clamp(lum / max(ref.x, 0.2), 0.55 + 0.37 * cardFill, 1.1 - 0.04 * cardFill) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
