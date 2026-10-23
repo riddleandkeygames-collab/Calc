@@ -217,6 +217,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <li><b>Do the pause before the reveal.</b> If the writing would already be showing when you pause, choose “Start again from the beginning” below, so nobody sees it appear.</li>
         <li><b>Digits first</b> (the other way): tap two digits on the still picture, then the next tap anywhere plays.</li>
         <li><b>Confirmation:</b> once both digits are in, the file size under the date changes to <b>4.NN MB</b>, where NN is the out. 4.07 MB means out 07.</li>
+        <li><b>Cards</b> (playing-card effects): the screen is a clock face for the value (1 Ace, 2 to 10, 11 Jack, 12 Queen; <b>two quick taps on the 1 for King</b>). Then tap a quarter of the screen for the suit, clockwise from top left: <b>Clubs, Hearts, Spades, Diamonds</b> (CHaSeD). A tap in the <b>middle</b> for the value is the <b>Joker</b>, and the next tap just plays. With play, pause, play: play, pause on the value, play on the suit. The file size shows the value, then the suit after the point (1 Clubs, 2 Hearts, 3 Spades, 4 Diamonds): 7.2x MB is the 7 of Hearts, 13.4x MB the King of Diamonds, 53.0 MB the Joker.</li>
         <li><b>Swipe down:</b> take back the last tap only, if you hit the wrong place.</li>
         <li><b>Swipe left or right:</b> clears the digits and goes back to the start. Use it if you mistype.</li>
         <li><b>Hold anywhere (1.5 seconds):</b> opens this screen.</li>
@@ -259,6 +260,11 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
           <option value="two">Two taps: play, then one tap while it plays</option>
           <option value="first">Digits first, then play</option>
         </select></div>
+      <div class="srow"><label for="cfgCardIn">Entering a card<br><small>For playing-card effects.</small></label>
+        <select id="cfgCardIn">
+          <option value="clock">Clock face for the value, quarter of the screen for the suit</option>
+          <option value="keypad">Two digits on the keypad (the out number)</option>
+        </select></div>
       <div class="srow"><label for="cfgTimeIn">Entering a time<br><small>For the station clock.</small></label>
         <select id="cfgTimeIn">
           <option value="clock">Clock face: hour, then minutes in fives</option>
@@ -298,7 +304,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 27</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 28</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -325,7 +331,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { recDay: 'today', recMode: 'fixed', recTime: '08:14', recDate: '', entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 25, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { cardIn: 'clock', recDay: 'today', recMode: 'fixed', recTime: '08:14', recDate: '', entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 28, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -371,14 +377,14 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     { id: 'cities', name: 'Cities', outs: list(['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney', 'Barcelona', 'Dubai', 'Las Vegas', 'Amsterdam']), pics: {} }
   ];
   const startSets = (outs, pics) => [
-    { id: 'cards', name: 'Playing cards', outs, pics },
+    { id: 'cards', name: 'Playing cards', kind: 'cards', outs, pics },
     { id: 'numbers', name: 'Numbers 1 to 99', outs: '', pics: {} }
   ].concat(JSON.parse(JSON.stringify(READY)));
   if (cfg.v < 12) {   // version 12: outs and pictures moved into sets
     cfg.sets = startSets(cfg.outs || CARDS.join('\n'), cfg.pics || {}); cfg.set = 'cards';
     delete cfg.outs; delete cfg.pics; cfg.v = 12;
   }
-  if (!cfg.sets) cfg.sets = startSets(CARDS.join('\n'), { '60': { name: '7 of Hearts card (example)', src: 'card-7h.png' } });   // a fresh install
+  if (!cfg.sets) cfg.sets = startSets(CARDS.join('\n') + '\nJoker', { '60': { name: '7 of Hearts card (example)', src: 'card-7h.png' } });   // a fresh install
   // An effect also remembers its look: video, handwriting, ink, and the size and position of writing and pictures on each video.
   // (The surface corners, masking and start time belong to the video, so they're shared by every effect.)
   const STYLE = ['scene', 'font', 'ink', 'red'];
@@ -408,7 +414,13 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   }
   if (cfg.v < 22) { cfg.entry = 'two'; cfg.timeIn = 'clock'; }   // version 22: two taps by default, clock face for times
   if (cfg.v < 25) cfg.entry = 'pause';   // version 25: play, pause, play is the default again
-  cfg.v = Math.max(cfg.v, 25);
+  if (cfg.v < 28) cfg.sets.forEach(x => {   // version 28: card input for playing-card effects, and a Joker in 53
+    if (x.id === 'cards' || /^Ace\|of Clubs/.test(x.outs)) {
+      x.kind = 'cards';
+      const a = x.outs.split('\n'); while (a.length < 53) a.push(''); if (!a[52].trim()) a[52] = 'Joker'; x.outs = a.join('\n');
+    }
+  });
+  cfg.v = Math.max(cfg.v, 28);
   cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
   const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
   STYLE.forEach(k => { cfg[k] = set()[k]; });
@@ -801,6 +813,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // The file size confirms what's been tapped so far: 4.07 MB is out 07, 07.45 MB is 7:45. Part-way, the digits so far
   // replace the start of the usual number, so after the hour of 7:45 it reads 07.37 MB.
   function stamp() {
+    if (cfg.peek && cardMode() && card.joker) return '53.0 MB';
+    if (cfg.peek && cardMode() && card.v !== null) return card.v + '.' + (card.s === null ? size0.slice(2) : (card.s + 1) + size0.slice(3)) + ' MB';
     if (!cfg.peek || !digits) return size0 + ' MB';
     const fill = size0.slice(2).repeat(2), d = digits + fill.slice(digits.length);
     return (need() === 4 ? d.slice(0, 2) + '.' + d.slice(2, 4) : '4.' + d.slice(0, 2)) + ' MB';
@@ -811,7 +825,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     return String(row * 3 + Math.min(2, Math.floor(3 * x / innerWidth)) + 1);
   }
   function reset() {
-    digits = ''; state = 'idle'; playing = false;
+    digits = ''; state = 'idle'; playing = false; freshCard();
     video.pause(); try { video.currentTime = 0; } catch (e) {}
     cv.hidden = true; $('poster').hidden = false; $('playBtn').hidden = false;
     $('scrubFill').style.width = '0'; $('tNow').textContent = '0:00'; $('t2').textContent = stamp();
@@ -830,6 +844,38 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const a = Math.atan2(nx, ny);   // 0 at 12 o'clock, clockwise
     return ((Math.round(a / (Math.PI / 6)) % 12) + 12) % 12 || 12;
   }
+  // Card input, for the playing-card effect: the stretched clock face for the value (1 Ace ... 11 Jack, 12 Queen, two quick
+  // taps on the 1 for King), then a quarter of the screen for the suit, clockwise from top left in CHaSeD order. A tap in
+  // the middle for the value is the Joker.
+  const cardMode = () => set().kind === 'cards' && cfg.cardIn !== 'keypad';
+  const SUIT_NAMES = ['Clubs', 'Hearts', 'Spades', 'Diamonds'];
+  let card = { v: null, s: null, t: 0, king: false, joker: false };
+  const freshCard = () => { card = { v: null, s: null, t: 0, king: false, joker: false }; };
+  const inCentre = (x, y) => Math.hypot(x - innerWidth / 2, y - innerHeight / 2) < innerWidth * 0.2;
+  function clockDir(x, y) {
+    const nx = (x - innerWidth / 2) / (innerWidth / 2), ny = (innerHeight / 2 - y) / (innerHeight / 2);
+    return ((Math.round(Math.atan2(nx, ny) / (Math.PI / 6)) % 12) + 12) % 12 || 12;
+  }
+  const quadrant = (x, y) => y < innerHeight / 2 ? (x < innerWidth / 2 ? 0 : 1) : (x < innerWidth / 2 ? 3 : 2);
+  function addCard(x, y) {   // 'more': wait for the next tap; 'hold': as 'more', but don't play on; 'done'
+    if (card.joker) return 'done';   // the tap after a Joker just plays
+    if (card.v === null) {
+      if (inCentre(x, y)) { card.joker = true; return cfg.entry === 'pause' ? 'more' : 'done'; }
+      card.v = clockDir(x, y); card.t = Date.now(); return 'more';
+    }
+    if (card.v === 1 && !card.king && Date.now() - card.t < 600 && !inCentre(x, y) && clockDir(x, y) === 1) { card.v = 13; card.king = true; return 'hold'; }
+    card.s = quadrant(x, y); return 'done';
+  }
+  // One tap of input, whatever the effect: returns 'more', 'hold' or 'done', and when done leaves the out in digits.
+  function addTap(x, y) {
+    if (cardMode()) {
+      const r = addCard(x, y);
+      if (r === 'done') digits = card.joker ? '53' : nn(card.s * 13 + card.v);
+      return r;
+    }
+    digits += entryAt(x, y);
+    return digits.length >= need() ? 'done' : 'more';
+  }
   // What one tap adds: a keypad digit, or for a time the hour (first tap) or minutes in fives (second tap).
   function entryAt(x, y) {
     if (!clockFace()) return keyAt(x, y);
@@ -839,6 +885,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   const step = () => clockFace() ? 2 : 1;
   // Swipe down: take back the last tap only.
   function undo() {
+    if (cardMode() && state !== 'played' && (card.v !== null || card.joker)) {   // a card starts again from its value
+      freshCard(); digits = ''; if (state === 'armed') state = 'idle'; $('t2').textContent = stamp(); buzz(20); return;
+    }
     if (!digits || state === 'played') return;
     digits = digits.slice(0, -step()); if (state === 'armed') state = 'idle';
     $('t2').textContent = stamp(); buzz(20);
@@ -862,10 +911,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   function onTap(x, y) {
     if (cfg.entry === 'two') {
       // Two taps: the tap that plays the video is the first digit (or the hour); a tap while it plays is the next.
-      if (state === 'idle') { digits += entryAt(x, y); $('t2').textContent = stamp(); state = 'running'; play(null); }
+      if (state === 'idle') { const r = addTap(x, y); $('t2').textContent = stamp(); state = 'running'; play(null); if (r === 'done') finish(); }
       else if (state === 'running') {
-        digits += entryAt(x, y);
-        if (digits.length >= need()) { flashControls(); finish(); } else { $('t2').textContent = stamp(); flashControls(); }
+        if (addTap(x, y) === 'done') { flashControls(); finish(); } else { $('t2').textContent = stamp(); flashControls(); }
       }
       return;
     }
@@ -873,17 +921,16 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       // Play, pause, play: tap 1 plays (anywhere); each pause and each play after it is a digit.
       // Two digits: pause, play. Four (a time): pause, play, pause, play.
       if (state === 'idle') { state = 'running'; play(null); }
-      else if (state === 'running') { pause(); digits += entryAt(x, y); state = 'paused'; $('t2').textContent = stamp(); if (digits.length >= need()) finish(); }
+      else if (state === 'running') { pause(); const r = addTap(x, y); state = 'paused'; $('t2').textContent = stamp(); if (r === 'done') finish(); }
       else if (state === 'paused') {
-        digits += entryAt(x, y);
-        if (digits.length >= need()) finish(); else { $('t2').textContent = stamp(); state = 'running'; play(null, false); }
+        const r = addTap(x, y);
+        if (r === 'done') finish(); else if (r === 'hold') $('t2').textContent = stamp(); else { $('t2').textContent = stamp(); state = 'running'; play(null, false); }
       }
       return;
     }
     // Digits first: tap the digits, then the next tap plays.
     if (state === 'idle') {
-      digits += entryAt(x, y);
-      if (digits.length === need()) state = 'armed';
+      if (addTap(x, y) === 'done') state = 'armed';
       $('t2').textContent = stamp();
     } else if (state === 'armed') {
       state = 'played'; play(+digits);
@@ -1024,18 +1071,18 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   }));
   function openSheet() {
     recFields();
-    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgTimeIn').value = cfg.timeIn; $('cfgResume').value = cfg.resume;
+    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgTimeIn').value = cfg.timeIn; $('cfgCardIn').value = cfg.cardIn; $('cfgResume').value = cfg.resume;
     fillSets(); buildOuts();
     $('sheet').hidden = false;
   }
   function readSheet() {
     const sceneChanged = cfg.scene !== $('cfgScene').value;
-    cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked; cfg.entry = $('cfgEntry').value; cfg.timeIn = $('cfgTimeIn').value; cfg.resume = $('cfgResume').value;
+    cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked; cfg.entry = $('cfgEntry').value; cfg.timeIn = $('cfgTimeIn').value; cfg.cardIn = $('cfgCardIn').value; cfg.resume = $('cfgResume').value;
     STYLE.forEach(k => { set()[k] = cfg[k]; });
     set().outs = readOuts(); save();
     if (sceneChanged) { loadScene(); $('delRow').hidden = !!SCENES[cfg.scene]; }
   }
-  ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek', 'cfgEntry', 'cfgTimeIn', 'cfgResume'].forEach(id => $(id).addEventListener('change', readSheet));
+  ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek', 'cfgEntry', 'cfgTimeIn', 'cfgCardIn', 'cfgResume'].forEach(id => $(id).addEventListener('change', readSheet));
   $('cfgTimeIn').addEventListener('change', () => buildOuts());
   $('cardsBtn').addEventListener('click', () => {
     for (let i = 0; i < 52; i++) { const el = $('out' + nn(i + 1)); if (el.disabled) el.dataset.text = CARDS[i]; else el.value = CARDS[i]; }
