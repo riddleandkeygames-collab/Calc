@@ -38,6 +38,8 @@ body {
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
+/* The video takes every touch itself, so the browser never claims a swipe for scrolling and cancels it. */
+#viewer { touch-action: none; }
 .viewer { position: fixed; inset: 0; background: var(--bg); }
 .viewer canvas, .viewer img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .bar { position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: 12px; pointer-events: none;
@@ -220,9 +222,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <li><b>Digits first</b> (the other way): tap two digits on the still picture, then the next tap anywhere plays.</li>
         <li><b>Confirmation:</b> once both digits are in, the file size under the date changes to <b>4.NN MB</b>, where NN is the out. 4.07 MB means out 07.</li>
         <li><b>Cards</b> (playing-card effects): the screen is a clock face for the value (1 Ace, 2 to 10, 11 Jack, 12 Queen; <b>two quick taps on the 1 for King</b>). Then tap a quarter of the screen for the suit, clockwise from top left: <b>Clubs, Hearts, Spades, Diamonds</b> (CHaSeD). A tap in the <b>middle</b> for the value is the <b>Joker</b>, and the next tap just plays. With play, pause, play: play, pause on the value, play on the suit. The file size shows the value, then the suit after the point (1 Clubs, 2 Hearts, 3 Spades, 4 Diamonds): 7.2x MB is the 7 of Hearts, 13.4x MB the King of Diamonds, 53.0 MB the Joker.</li>
-        <li><b>Swipe down:</b> take back the last tap only, if you hit the wrong place.</li>
+        <li><b>Swipe up:</b> take back the last tap only, if you hit the wrong place.</li>
         <li><b>Swipe left or right:</b> clears the digits and goes back to the start. Use it if you mistype.</li>
-        <li><b>Hold anywhere (1.5 seconds):</b> opens this screen.</li>
+        <li><b>Swipe down:</b> opens this screen.</li>
       </ul>
     </div>
 
@@ -306,7 +308,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 33</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 34</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -600,9 +602,16 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       // Optional mask: only where the pixel looks like the surface (about as bright, no more colourful), so a cover or a hand hides the writing.
       '  float m = mix(1.0, smoothstep(ref.x - 0.27, ref.x - 0.12, lum) * (1.0 - smoothstep(ref.y + 0.06, ref.y + 0.16, sat)), useMask);',
       // A card face: only skin (colourful) or the dark background hides it, not the grey shadows fingers cast on the card.
-      '  if (cardFill > 0.5) m = smoothstep(0.18, 0.3, lum) * (1.0 - smoothstep(0.08, 0.15, sat));',
+      '  if (cardFill > 0.5 && cardFill < 1.5) m = smoothstep(0.18, 0.3, lum) * (1.0 - smoothstep(0.08, 0.15, sat));',
       // Real ink is patchy, a little grainy like the rest of the footage, and a shiny surface's highlights sit on top of it.
       // A picture keeps its own colours but takes on the light falling on the surface beneath it, and the footage's grain.
+      // A card in the scene's own light: printed onto whatever is there, like ink, so it shows exactly as much as the blank card
+      // does (half hidden behind something passing in front is half shown). Only skin covers it outright.
+      '  if (mode > 0.5 && cardFill > 1.5) {',
+      '    float skin = 1.0 - smoothstep(ref.y + 0.06, ref.y + 0.16, sat);',
+      '    vec3 lit3 = c / max(ref.x, 0.2) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
+      '    gl_FragColor = vec4(mix(c, min(im.rgb * lit3, vec3(1.0)), a * skin * on), 1.0); return;',
+      '  }',
       '  if (mode > 0.5) {',
       '    float lit = clamp(lum / max(ref.x, 0.2), 0.55 + 0.37 * cardFill, 1.1 - 0.04 * cardFill) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
       '    gl_FragColor = vec4(mix(c, im.rgb * lit, a * m * on), 1.0); return;',
@@ -631,7 +640,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     setQuad(scene.quad);
     gl.uniform2f(U.size, scene.w, scene.h);
     gl.uniform1f(U.usePatch, scene.patch ? 1 : 0); if (scene.patch) gl.uniform4fv(U.patchR, scene.patch);
-    gl.uniform1f(U.cardFill, scene.card && scene.flat ? 1 : 0); gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
+    gl.uniform1f(U.cardFill, scene.card ? (scene.flat ? 1 : 2) : 0); gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
   }
   function setQuad(q) {
     const h = homography(q, UNIT), f = homography(UNIT, q);
@@ -794,6 +803,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         if (!rec) throw new Error('missing');
         vblob = rec.video; poster = URL.createObjectURL(rec.poster); urls.push(poster);
       }
+      if (scene.card) for (let f = 1; f <= 53; f++) faceImg(f);
       if (scene.trackSrc) scene.trackData = trackCache[scene.trackSrc] || (trackCache[scene.trackSrc] = await (await fetch(scene.trackSrc)).json());
       const vu = URL.createObjectURL(vblob); urls.push(vu);
       $('poster').src = poster; $('poster').hidden = false;
@@ -953,7 +963,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     return digits.length === 0 ? nn(n) : nn((n % 12) * 5);
   }
   const step = () => clockFace() ? 2 : 1;
-  // Swipe down: take back the last tap only.
+  // Swipe up: take back the last tap only.
   function undo() {
     if (cardMode() && state !== 'played' && (card.v !== null || card.joker)) {   // a card starts again from its value
       freshCard(); digits = ''; if (state === 'armed') state = 'idle'; $('t2').textContent = stamp(); buzz(20); return;
@@ -1006,24 +1016,22 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       state = 'played'; play(+digits);
     }
   }
-  // One handler for taps, swipes and the hold, reading the finger directly.
-  let sx = 0, sy = 0, st = 0, down = false, holdT = null;
+  // One handler for taps and swipes, reading the finger directly.
+  let sx = 0, sy = 0, st = 0, down = false;
   const viewer = $('viewer');
   viewer.addEventListener('pointerdown', e => {
     if (state === 'place') return;
     sx = e.clientX; sy = e.clientY; st = Date.now(); down = true;
-    clearTimeout(holdT); holdT = setTimeout(() => { down = false; openSheet(); }, 1500);
   });
-  viewer.addEventListener('pointermove', e => { if (down && Math.hypot(e.clientX - sx, e.clientY - sy) > 12) clearTimeout(holdT); });
   viewer.addEventListener('pointerup', e => {
-    clearTimeout(holdT);
     if (!down) return; down = false;
     const dx = e.clientX - sx, dy = e.clientY - sy;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { reset(); return; }
-    if (dy > 60 && dy > Math.abs(dx) * 1.5) { undo(); return; }
+    if (dy > 60 && dy > Math.abs(dx) * 1.5) { openSheet(); return; }   // swipe down: settings
+    if (dy < -60 && -dy > Math.abs(dx) * 1.5) { undo(); return; }      // swipe up: take back the last tap
     if (Math.hypot(dx, dy) < 12 && Date.now() - st < 700) onTap(sx, sy);
   });
-  viewer.addEventListener('pointercancel', () => { clearTimeout(holdT); down = false; });
+  viewer.addEventListener('pointercancel', () => { down = false; });
   viewer.addEventListener('contextmenu', e => e.preventDefault());
 
   // ---- settings screen ----
@@ -1043,9 +1051,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
       const p = document.createElement('p');
       p.innerHTML = cfg.timeIn === 'clock'
         ? (cfg.timeIn === 'clock'
-          ? 'This effect predicts a <b>time</b>, so there are no boxes to fill. The whole screen is an invisible <b>clock face</b>, stretched to fit it: 12 at the middle of the top edge, 3 at the middle of the right edge, 6 at the bottom, 9 at the left; the corners are between numbers (top right is half way between 1 and 2). Tap out near the edge where that number would be, not near the middle. <b>First tap: the hour. Second tap: the minutes in fives</b> (the 9 for 45, the 4 for 20, the 12 for o\u2019clock). With play, pause, play: tap anywhere to play, pause by tapping towards the hour, play again by tapping towards the minutes. For 7:45: play, pause towards the 7 (lower left), play towards the 9 (middle of the left edge). With two taps instead: play on the hour, then one tap on the minutes. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.'
-          : 'This effect predicts a <b>time</b>, so there are no boxes to fill. The screen is <b>12 invisible boxes</b>: the usual keypad rows 1 2 3 / 4 5 6 / 7 8 9, with the bottom row split into <b>10 11 12</b>. <b>First tap: the hour. Second tap: the minutes in fives, read like a clock face</b> (box 9 for 45, box 4 for 20, box 12 for o\u2019clock). With two taps: play on the hour, tap once more on the minutes. For 7:45: play on box 7, then tap box 9. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.')
-        : 'This effect predicts a <b>time</b>, so there are no boxes to fill. Tap four digits on the keypad, hours then minutes: <b>0745</b> is 7:45, <b>1120</b> is 11:20. With play, pause, play that is pause, play, pause, play. The file size shows the time once all four are in, e.g. <b>07.45 MB</b>. Swipe down to take back the last tap. Use it with the station clock video; on any other video the time is written instead.';
+          ? 'This effect predicts a <b>time</b>, so there are no boxes to fill. The whole screen is an invisible <b>clock face</b>, stretched to fit it: 12 at the middle of the top edge, 3 at the middle of the right edge, 6 at the bottom, 9 at the left; the corners are between numbers (top right is half way between 1 and 2). Tap out near the edge where that number would be, not near the middle. <b>First tap: the hour. Second tap: the minutes in fives</b> (the 9 for 45, the 4 for 20, the 12 for o\u2019clock). With play, pause, play: tap anywhere to play, pause by tapping towards the hour, play again by tapping towards the minutes. For 7:45: play, pause towards the 7 (lower left), play towards the 9 (middle of the left edge). With two taps instead: play on the hour, then one tap on the minutes. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe up to take back the last tap. Use it with the station clock video; on any other video the time is written instead.'
+          : 'This effect predicts a <b>time</b>, so there are no boxes to fill. The screen is <b>12 invisible boxes</b>: the usual keypad rows 1 2 3 / 4 5 6 / 7 8 9, with the bottom row split into <b>10 11 12</b>. <b>First tap: the hour. Second tap: the minutes in fives, read like a clock face</b> (box 9 for 45, box 4 for 20, box 12 for o\u2019clock). With two taps: play on the hour, tap once more on the minutes. For 7:45: play on box 7, then tap box 9. The file size shows the hour after the first tap (07.xx MB) and the full time after the second (07.45 MB). Swipe up to take back the last tap. Use it with the station clock video; on any other video the time is written instead.')
+        : 'This effect predicts a <b>time</b>, so there are no boxes to fill. Tap four digits on the keypad, hours then minutes: <b>0745</b> is 7:45, <b>1120</b> is 11:20. With play, pause, play that is pause, play, pause, play. The file size shows the time once all four are in, e.g. <b>07.45 MB</b>. Swipe up to take back the last tap. Use it with the station clock video; on any other video the time is written instead.';
       list.appendChild(p); return;
     }
     for (let i = 1; i <= 99; i++) {
