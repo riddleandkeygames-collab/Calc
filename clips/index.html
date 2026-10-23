@@ -306,7 +306,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 32</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 33</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -330,7 +330,10 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     cardm: { name: 'Card turned over (man, red back)', src: 'cardm.mp4', poster: 'cardm.jpg', w: 1080, h: 1920, quad: [[367.9, 565.7], [692.4, 569.7], [692.9, 1017.7], [367.1, 1018.5]],
       card: true, flat: true, track: 'cardm-track.json', reveal: 6.2 },
     cardf: { name: 'Card turned over (woman, blue back)', src: 'cardf.mp4', poster: 'cardf.jpg', w: 1080, h: 1920, quad: [[336.8, 556.9], [740.0, 556.4], [738.5, 1127.1], [338.7, 1128.6]],
-      card: true, flat: true, track: 'cardf-track.json', reveal: 6.7 }
+      card: true, flat: true, track: 'cardf-track.json', reveal: 6.7 },
+    // Someone talks to camera, then steps aside to show a blank card on the shelf behind; it keeps the room's light and shade.
+    shelf: { name: 'Card on the shelf (steps aside)', src: 'shelf.mp4', poster: 'shelf.jpg', w: 1080, h: 1920, quad: [[464.5, 1158.5], [562.5, 1155.5], [563.5, 1297.5], [466.5, 1298.5]],
+      card: true, reveal: 13.3, ref: [0.9, 0.02] }
   };
   const VALUES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
   const SUITS = ['Clubs', 'Hearts', 'Spades', 'Diamonds'];
@@ -339,7 +342,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   // ---- settings ----
   // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
   const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
-  const DEF = { cardIn: 'clock', recDay: 'today', recMode: 'fixed', recTime: '08:14', recDate: '', entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 29, scenes: {}, uploads: [], set: 'cards', sets: null };
+  const DEF = { cardIn: 'clock', recDay: 'today', recMode: 'fixed', recTime: '08:14', recDate: '', entry: 'pause', timeIn: 'clock', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 33, scenes: {}, uploads: [], set: 'cards', sets: null };
   let cfg = Object.assign({}, DEF);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
   if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
@@ -384,6 +387,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     { id: 'clock', name: 'Station clock (time)', kind: 'time', outs: '', pics: {}, scene: 'station' },
     { id: 'cardman', name: 'Card in hand (man)', kind: 'cards', outs: CARDS.join('\n') + '\nJoker', pics: {}, scene: 'cardm' },
     { id: 'cardwoman', name: 'Card in hand (woman)', kind: 'cards', outs: CARDS.join('\n') + '\nJoker', pics: {}, scene: 'cardf' },
+    { id: 'cardshelf', name: 'Card on the shelf', kind: 'cards', outs: CARDS.join('\n') + '\nJoker', pics: {}, scene: 'shelf' },
     { id: 'cities', name: 'Cities', outs: list(['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney', 'Barcelona', 'Dubai', 'Las Vegas', 'Amsterdam']), pics: {} }
   ];
   const startSets = (outs, pics) => [
@@ -435,7 +439,11 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     ['cardman', 'cardwoman'].forEach(id => { const r = READY.find(x => x.id === id);
       if (!cfg.sets.some(x => x.id === id)) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: {} }, Object.fromEntries(STYLE.map(k => [k, r[k] ?? look[k] ?? cfg[k]])))); });
   }
-  cfg.v = Math.max(cfg.v, 29);
+  if (cfg.v < 33) {   // version 33: the card on the shelf
+    const look = cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0], r = READY.find(x => x.id === 'cardshelf');
+    if (!cfg.sets.some(x => x.id === 'cardshelf')) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: {} }, Object.fromEntries(STYLE.map(k => [k, r[k] ?? look[k] ?? cfg[k]]))));
+  }
+  cfg.v = Math.max(cfg.v, 33);
   cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
   const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
   STYLE.forEach(k => { cfg[k] = set()[k]; });
