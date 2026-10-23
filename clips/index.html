@@ -155,6 +155,8 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     <div class="adj-row" id="rotRow" hidden><label for="adjRot">Tilt</label><input type="range" id="adjRot" min="-25" max="25" step="1"><output id="adjRotV"></output></div>
     <div class="adj-row"><label for="adjOp">Opacity</label><input type="range" id="adjOp" min="20" max="100" step="1"><output id="adjOpV"></output></div>
     <label class="adj-check"><input type="checkbox" id="adjMask"> Hide the writing behind anything darker than the surface<small>For light surfaces: a cover or hand in front hides it. Turn on while the surface is clear.</small></label>
+    <label class="adj-check" id="cardRow"><input type="checkbox" id="adjCard"> Whole card face<small>For a blank card in your video: the chosen playing card fills the four corners. Use it with a playing-card effect.</small></label>
+    <div class="adj-row2" id="findRow"><span id="findV">Go to a frame where the blank card is clear</span><button class="btn" id="adjFind">Find the card</button></div>
     <div class="adj-row2"><span id="adjFromV">Writing shows from the start</span><button class="btn" id="adjFrom">Show from this frame</button></div>
     <div class="adj-row2"><span>Start again with the writing in the middle</span><button class="btn" id="adjReset">Reset</button></div>
   </div>
@@ -304,7 +306,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
         <button class="btn" id="tryBtn">Play it</button></div>
     </div>
 
-    <div class="srow" style="border-bottom:0"><label>Version 31</label></div>
+    <div class="srow" style="border-bottom:0"><label>Version 32</label></div>
     <button class="btn primary" id="close">Done</button>
   </div>
 </div>
@@ -326,9 +328,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     // A blank card turned face up. Its corners are tracked frame by frame from the moment the face shows, and the
     // whole face is replaced by the chosen card (faces/01.jpg to 53.jpg); fingers stay in front because of the mask.
     cardm: { name: 'Card turned over (man, red back)', src: 'cardm.mp4', poster: 'cardm.jpg', w: 1080, h: 1920, quad: [[367.9, 565.7], [692.4, 569.7], [692.9, 1017.7], [367.1, 1018.5]],
-      card: true, track: 'cardm-track.json', reveal: 6.2 },
+      card: true, flat: true, track: 'cardm-track.json', reveal: 6.2 },
     cardf: { name: 'Card turned over (woman, blue back)', src: 'cardf.mp4', poster: 'cardf.jpg', w: 1080, h: 1920, quad: [[336.8, 556.9], [740.0, 556.4], [738.5, 1127.1], [338.7, 1128.6]],
-      card: true, track: 'cardf-track.json', reveal: 6.7 }
+      card: true, flat: true, track: 'cardf-track.json', reveal: 6.7 }
   };
   const VALUES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
   const SUITS = ['Clubs', 'Hearts', 'Spades', 'Diamonds'];
@@ -460,7 +462,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const own = cfg.scenes[key] || (cfg.scenes[key] = {});
     const base = { quad: b.quad || defaultQuad(b.w, b.h), mask: !!SCENES[key] && !b.clock, ref: b.ref || [0.82, 0.03] };
     const eff = set().place[key] || (set().place[key] = {});
-    const sc = Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster, clock: !!b.clock, card: !!b.card, trackSrc: b.track, trackData: b.track && trackCache[b.track], patch: b.patch },
+    const sc = Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster, clock: !!b.clock, card: !!(b.card || own.card), flat: !!b.flat, trackSrc: b.track, trackData: b.track && trackCache[b.track], patch: b.patch },
       base, PLACE, own, eff, { own, eff });
     // When the writing first becomes visible, so a late final digit restarts the video instead of the writing popping in.
     sc.reveal = b.reveal !== undefined ? b.reveal : (sc.from > 0 ? sc.from : null);
@@ -621,7 +623,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     setQuad(scene.quad);
     gl.uniform2f(U.size, scene.w, scene.h);
     gl.uniform1f(U.usePatch, scene.patch ? 1 : 0); if (scene.patch) gl.uniform4fv(U.patchR, scene.patch);
-    gl.uniform1f(U.cardFill, scene.card ? 1 : 0); gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
+    gl.uniform1f(U.cardFill, scene.card && scene.flat ? 1 : 0); gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
   }
   function setQuad(q) {
     const h = homography(q, UNIT), f = homography(UNIT, q);
@@ -723,8 +725,11 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     return null;
   }
   function fillCard(img) {
-    ink.width = img.width; ink.height = img.height;
-    const c = ink.getContext('2d'); c.clearRect(0, 0, ink.width, ink.height); c.drawImage(img, 0, 0);
+    // About the card's size in the video, so a small card in the distance is shrunk smoothly here rather than shimmering.
+    const { w, h } = surfaceSize(scene.quad), k = Math.min(1, 1.25 * Math.max(w / img.width, h / img.height));
+    ink.width = Math.max(16, Math.round(img.width * k)); ink.height = Math.max(16, Math.round(img.height * k));
+    const c = ink.getContext('2d'); c.clearRect(0, 0, ink.width, ink.height); c.imageSmoothingQuality = 'high';
+    c.drawImage(img, 0, 0, ink.width, ink.height);
   }
   // Draws out n (or nothing, for null) and hands it to the shader.
   function uploadOut(n) {
@@ -1224,6 +1229,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
     const out = previewOut();
     $('rotRow').hidden = adjMode !== 'pic'; $('picNote').hidden = !(adjMode === 'pic' && out === null);
     $('adjMask').checked = scene.mask;
+    $('cardRow').hidden = scene.builtIn || set().kind !== 'cards'; $('adjCard').checked = scene.card; $('findRow').hidden = $('cardRow').hidden || !scene.card;
     $('adjFromV').textContent = scene.from > 0 ? 'Writing shows from ' + scene.from.toFixed(1) + ' s' : 'Writing shows from the start';
     $('adjFrom').textContent = scene.from > 0 ? 'Show from the start' : 'Show from this frame';
     setScene(); uploadOut(out); frame(); drawHandles();
@@ -1265,6 +1271,45 @@ textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.
   $('adjMask').addEventListener('change', () => {
     const on = $('adjMask').checked;
     setOwn(on ? { mask: true, ref: measureSurface() } : { mask: false }); placeDraw();
+  });
+  // Finds a blank card in the frame showing now: the largest bright, plain patch shaped like a playing card.
+  function findCard() {
+    const pc = document.createElement('canvas'), W = scene.w, H = scene.h;
+    pc.width = W; pc.height = H;
+    const c = pc.getContext('2d', { willReadFrequently: true }); c.drawImage(video, 0, 0, W, H);
+    const d = c.getImageData(0, 0, W, H).data, wh = new Float32Array(W * H);
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+      const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+      wh[j] = mx - 3 * (mx ? (mx - mn) / mx * 255 : 0);   // bright and not colourful
+    }
+    const sorted = Float32Array.from(wh).sort(), thr = Math.max(140, sorted[Math.floor(sorted.length * 0.995)] - 35);
+    const seen = new Uint8Array(W * H), stack = new Int32Array(W * H);
+    let best = null;
+    for (let s = 0; s < W * H; s++) {
+      if (seen[s] || wh[s] < thr) continue;
+      let top = 0, n = 0; stack[top++] = s; seen[s] = 1;
+      let a = [Infinity, 0], b = [-Infinity, 0], cc = [-Infinity, 0], e = [Infinity, 0], pa, pb, pcc, pe;   // extremes of x+y and x-y
+      while (top) {
+        const p = stack[--top], x = p % W, y = (p - x) / W; n++;
+        if (x + y < a[0]) { a = [x + y]; pa = [x, y]; } if (x - y > b[0]) { b = [x - y]; pb = [x, y]; }
+        if (x + y > cc[0]) { cc = [x + y]; pcc = [x, y]; } if (x - y < e[0]) { e = [x - y]; pe = [x, y]; }
+        for (const q of [p - 1, p + 1, p - W, p + W]) if (q >= 0 && q < W * H && !seen[q] && wh[q] >= thr && Math.abs(q % W - x) <= 1) { seen[q] = 1; stack[top++] = q; }
+      }
+      if (n < 400) continue;
+      const quad = [pa, pb, pcc, pe], { w, h } = surfaceSize(quad);
+      const area = Math.abs(quad.reduce((t, p, i) => { const r = quad[(i + 1) % 4]; return t + p[0] * r[1] - r[0] * p[1]; }, 0)) / 2;
+      const fill = n / area, shape = Math.min(w, h) / Math.max(w, h);
+      if (fill < 0.85 || fill > 1.15 || shape < 0.6 || shape > 0.82) continue;
+      if (!best || n > best.n) best = { n, quad: h >= w ? quad : [pb, pcc, pe, pa] };   // portrait: top-left first
+    }
+    return best && best.quad.map(p => [p[0] + 0.5, p[1] + 0.5]);
+  }
+  $('adjCard').addEventListener('change', () => { setOwn({ card: $('adjCard').checked }); placeDraw(); });
+  $('adjFind').addEventListener('click', () => {
+    const q = findCard();
+    if (!q) { $('findV').textContent = 'No blank card found on this frame. Try a frame where it’s clear, or drag the corners.'; return; }
+    scene.quad = q; setOwn({ quad: q }); setOwn({ mask: true, ref: measureSurface() });
+    $('findV').textContent = 'Found it. Check the corners sit on the card.'; placeDraw();
   });
   $('adjFrom').addEventListener('click', () => { setOwn({ from: scene.from > 0 ? 0 : Math.max(0.01, video.currentTime) }); placeDraw(); });
   $('adjFold').addEventListener('click', () => { const h = !$('adjBody').hidden; $('adjBody').hidden = h; $('adjFold').textContent = h ? 'Show controls' : 'Hide controls'; drawHandles(); });
